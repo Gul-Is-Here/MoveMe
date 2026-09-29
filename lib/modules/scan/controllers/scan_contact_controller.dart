@@ -95,7 +95,7 @@ class ScanContactController extends GetxController {
       prefersWeb.value = (await SharedPreferences.getInstance()).getBool(_preferWebPrefsKey) ?? false;
 
       _ownerUid = data['ownerUid'] as String? ?? '';
-      ownerName.value = data['ownerName'] as String? ?? 'A ParkTag resident';
+      ownerName.value = data['ownerName'] as String? ?? 'A MoveMe resident';
       nickname.value = data['nickname'] as String? ?? '';
       makeModel.value = data['makeModel'] as String? ?? '';
       plateNumber.value = data['plateNumber'] as String? ?? '';

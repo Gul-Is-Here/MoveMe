@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "car-ping-9d4f8"
+    "default": "moveme-da262",
+    "legacy": "car-ping-9d4f8"
   }
 }

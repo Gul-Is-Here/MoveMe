@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "391458076633",
-    "project_id": "car-ping-9d4f8",
-    "storage_bucket": "car-ping-9d4f8.firebasestorage.app"
+    "project_number": "709693784542",
+    "project_id": "moveme-da262",
+    "storage_bucket": "moveme-da262.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:391458076633:android:80be9faf86b18f26fbcbc8",
+        "mobilesdk_app_id": "1:709693784542:android:dfaa359dd3763af9209d4f",
         "android_client_info": {
           "package_name": "com.parktagapp.mobile"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyC1euBHJwicf_4qHj8dtmLSaCZo07MvnHU"
+          "current_key": "AIzaSyD4RceTnj9G2Tui_hpQtr81-KzWLeDuOhI"
         }
       ],
       "services": {

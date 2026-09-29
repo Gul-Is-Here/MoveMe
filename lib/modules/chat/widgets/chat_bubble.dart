@@ -1,7 +1,13 @@
+import 'dart:async';
+
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../app/utils/app_logger.dart';
+import '../../../app/widgets/app_snackbar.dart';
 import '../../dashboard/models/chat_message_model.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -129,30 +135,7 @@ class ChatBubble extends StatelessWidget {
             borderRadius: radius,
             border: isOwner ? null : Border.all(color: AppColors.border, width: 1.5),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: isOwner ? AppColors.background : Color(0xFF2A2210),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.play_arrow, size: 15, color: isOwner ? AppColors.yellow : AppColors.yellow),
-              ),
-              const SizedBox(width: 10),
-              Icon(Icons.graphic_eq, size: 18, color: isOwner ? AppColors.background : AppColors.muted),
-              const SizedBox(width: 10),
-              Text(
-                message.voiceDuration,
-                style: AppTextStyles.caption.copyWith(
-                  color: isOwner ? AppColors.background : AppColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          child: _VoiceBubbleContent(message: message, isOwner: isOwner),
         );
       case ChatMessageKind.photo:
         return ClipRRect(
@@ -172,5 +155,126 @@ class ChatBubble extends StatelessWidget {
           ),
         );
     }
+  }
+}
+
+/// The play/pause control and waveform-style row inside a voice bubble.
+/// Owns its own [AudioPlayer] — each bubble plays independently, and this
+/// widget's [dispose] releases the player the moment the bubble scrolls
+/// out and is recycled by [ListView.builder].
+class _VoiceBubbleContent extends StatefulWidget {
+  const _VoiceBubbleContent({required this.message, required this.isOwner});
+
+  final ChatMessageModel message;
+  final bool isOwner;
+
+  @override
+  State<_VoiceBubbleContent> createState() => _VoiceBubbleContentState();
+}
+
+class _VoiceBubbleContentState extends State<_VoiceBubbleContent> {
+  final _player = AudioPlayer();
+  late final StreamSubscription<PlayerState> _stateSub;
+  PlayerState _state = PlayerState(false, ProcessingState.idle);
+  bool _preparing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _stateSub = _player.playerStateStream.listen(
+      (state) {
+        if (state.processingState == ProcessingState.completed) {
+          _player.pause();
+          _player.seek(Duration.zero);
+        }
+        if (mounted) setState(() => _state = state);
+      },
+      onError: (Object e, StackTrace st) => AppLogger.error('VoiceBubble', e, st),
+    );
+  }
+
+  @override
+  void dispose() {
+    _stateSub.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  bool get _isPlaying => _state.playing && _state.processingState != ProcessingState.completed;
+
+  bool get _isBuffering =>
+      _preparing ||
+      (_state.playing &&
+          (_state.processingState == ProcessingState.loading ||
+              _state.processingState == ProcessingState.buffering));
+
+  Future<void> _toggle() async {
+    final url = widget.message.audioUrl;
+    if (url == null) return;
+
+    if (_isPlaying) {
+      await _player.pause();
+      return;
+    }
+
+    try {
+      if (_player.audioSource == null) {
+        setState(() => _preparing = true);
+        // The default iOS session is silenced by the ringer switch and, right
+        // after a recording, can stay routed to the earpiece.
+        final session = await AudioSession.instance;
+        await session.configure(const AudioSessionConfiguration.music());
+        await _player.setUrl(url);
+      }
+      // play() only completes when playback stops, so it must not be awaited.
+      unawaited(_player.play().catchError((Object e, StackTrace st) {
+        AppLogger.error('VoiceBubble', e, st);
+      }));
+    } catch (e, st) {
+      AppLogger.error('VoiceBubble', e, st);
+      AppSnackbar.show('Could not play voice message', 'Please check your connection and try again.');
+    } finally {
+      if (mounted) setState(() => _preparing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwner = widget.isOwner;
+    final iconColor = AppColors.yellow;
+    final uploading = widget.message.audioUrl == null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: uploading ? null : _toggle,
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: isOwner ? AppColors.surface : AppColors.yellow.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: (_isBuffering || uploading)
+                ? Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 1.6, color: iconColor),
+                  )
+                : Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 18, color: iconColor),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(Icons.graphic_eq, size: 18, color: isOwner ? AppColors.background : AppColors.muted),
+        const SizedBox(width: 10),
+        Text(
+          widget.message.voiceDuration,
+          style: AppTextStyles.caption.copyWith(
+            color: isOwner ? AppColors.background : AppColors.muted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }

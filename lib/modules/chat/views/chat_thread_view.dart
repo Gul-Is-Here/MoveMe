@@ -283,15 +283,20 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          _IconButton(icon: Icons.call_outlined, onTap: () => controller.startCall(video: false)),
-          const SizedBox(width: 8),
-          _IconButton(icon: Icons.videocam_outlined, onTap: () => controller.startCall(video: true)),
+          // Disabled for this module — re-enable by uncommenting. The
+          // controller method behind these (`startCall`) is untouched.
+          // _IconButton(icon: Icons.call_outlined, onTap: () => controller.startCall(video: false)),
+          // const SizedBox(width: 8),
+          // _IconButton(icon: Icons.videocam_outlined, onTap: () => controller.startCall(video: true)),
         ],
       ),
     );
   }
 }
 
+// Only used by the call/attachment buttons commented out above — kept so
+// re-enabling them doesn't also mean rebuilding this widget.
+// ignore: unused_element
 class _IconButton extends StatelessWidget {
   const _IconButton({required this.icon, required this.onTap});
 
@@ -360,65 +365,171 @@ class _InputBarState extends State<_InputBar> {
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: _IconButton(icon: Icons.attach_file, onTap: controller.attachMedia),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 42, maxHeight: 132),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border, width: 1.5),
+      child: Obx(
+        () => controller.isRecording.value
+            ? _RecordingBar(controller: controller)
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Disabled for this module — re-enable by uncommenting.
+                  // The controller method behind this (`attachMedia`) is
+                  // untouched.
+                  // Padding(
+                  //   padding: const EdgeInsets.only(bottom: 3),
+                  //   child: _IconButton(icon: Icons.attach_file, onTap: controller.attachMedia),
+                  // ),
+                  // const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 42, maxHeight: 132),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border, width: 1.5),
+                      ),
+                      child: TextField(
+                        controller: controller.textController,
+                        minLines: 1,
+                        maxLines: 5,
+                        textCapitalization: TextCapitalization.sentences,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        cursorColor: AppColors.yellow,
+                        style: AppTextStyles.fieldValue.copyWith(color: AppColors.ink, fontSize: 14, height: 1.35),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          isCollapsed: true,
+                          hintText: 'Message ${controller.counterpartName}...',
+                          hintStyle: AppTextStyles.manropeBase.copyWith(color: AppColors.faint, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: GestureDetector(
+                      onTap: _hasText ? controller.sendText : controller.startVoiceRecording,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(color: AppColors.yellow, shape: BoxShape.circle),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 160),
+                          child: Icon(
+                            _hasText ? Icons.send_rounded : Icons.mic_none,
+                            key: ValueKey(_hasText),
+                            size: 18,
+                            color: AppColors.background,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              child: TextField(
-                controller: controller.textController,
-                minLines: 1,
-                maxLines: 5,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                cursorColor: AppColors.yellow,
-                style: AppTextStyles.fieldValue.copyWith(color: AppColors.ink, fontSize: 14, height: 1.35),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                  hintText: 'Message ${controller.counterpartName}...',
-                  hintStyle: AppTextStyles.manropeBase.copyWith(color: AppColors.faint, fontSize: 14),
-                ),
-              ),
+      ),
+    );
+  }
+}
+
+/// Replaces the composer while a voice message is being recorded: a cancel
+/// (delete) button, a live elapsed timer with a pulsing mic, and a send
+/// button — the three actions the recording flow needs, laid out like the
+/// rest of the composer.
+class _RecordingBar extends StatefulWidget {
+  const _RecordingBar({required this.controller});
+
+  final ChatThreadController controller;
+
+  @override
+  State<_RecordingBar> createState() => _RecordingBarState();
+}
+
+class _RecordingBarState extends State<_RecordingBar> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  String _label(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '$minutes:${secs.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        GestureDetector(
+          onTap: controller.cancelVoiceRecording,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.border, width: 1.5),
             ),
+            child: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFE0736B)),
           ),
-          const SizedBox(width: 10),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: GestureDetector(
-              onTap: _hasText ? controller.sendText : controller.recordVoiceNote,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: AppColors.yellow, shape: BoxShape.circle),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  child: Icon(
-                    _hasText ? Icons.send_rounded : Icons.mic_none,
-                    key: ValueKey(_hasText),
-                    size: 18,
-                    color: AppColors.background,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                FadeTransition(
+                  opacity: Tween(begin: 0.35, end: 1.0).animate(_pulse),
+                  child: const Icon(Icons.fiber_manual_record, size: 12, color: Color(0xFFE0736B)),
+                ),
+                const SizedBox(width: 10),
+                Obx(
+                  () => Text(
+                    _label(controller.recordingSeconds.value),
+                    style: AppTextStyles.fieldValue.copyWith(
+                      color: AppColors.ink,
+                      fontSize: 14,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-              ),
+                const Spacer(),
+                Text(
+                  'Recording voice message…',
+                  style: AppTextStyles.subtitle.copyWith(color: AppColors.faint, fontSize: 12.5),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: controller.sendVoiceRecording,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(color: AppColors.yellow, shape: BoxShape.circle),
+            child: Icon(Icons.check, size: 20, color: AppColors.background),
+          ),
+        ),
+      ],
     );
   }
 }

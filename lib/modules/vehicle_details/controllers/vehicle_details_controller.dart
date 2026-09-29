@@ -82,7 +82,7 @@ class VehicleDetailsController extends GetxController {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path)],
-          text: 'Scan this to reach me about my ${vehicle.plateNumber} — via ParkTag.',
+          text: 'Scan this to reach me about my ${vehicle.plateNumber} — via MoveMe.',
         ),
       );
     } catch (e, stack) {

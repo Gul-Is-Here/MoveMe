@@ -24,25 +24,27 @@ class VehicleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(22),
       child: InkWell(
         onTap: () => Get.toNamed(AppRoutes.vehicleDetails, arguments: vehicle),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         splashColor: AppColors.yellow.withValues(alpha: 0.06),
         highlightColor: AppColors.yellow.withValues(alpha: 0.04),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: hasUnread ? AppColors.yellow.withValues(alpha: 0.5) : AppColors.border,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: hasUnread
+                    ? AppColors.yellow.withValues(alpha: 0.14)
+                    : Colors.black.withValues(alpha: 0.07),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),

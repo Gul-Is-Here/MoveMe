@@ -279,8 +279,8 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> deleteResidentAccount(String uid) async {
-    await _firestore.collection('users').doc(uid).delete();
-    await _auth.currentUser?.delete();
+    // Server-side cascade: see `deleteAccount` in functions/index.js.
+    await FirebaseFunctions.instance.httpsCallable('deleteAccount').call();
   }
 
   @override

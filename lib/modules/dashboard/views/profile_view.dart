@@ -1,15 +1,24 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../../../app/widgets/bound_view.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../app/theme/theme_controller.dart';
 import '../../../app/utils/auth_input.dart';
+import '../../../app/widgets/bound_view.dart';
+import '../../../app/widgets/dot_grid_background.dart';
+import '../../../app/widgets/motion.dart';
+import '../../../app/widgets/shimmer.dart';
 import '../../auth/widgets/auth_primary_button.dart';
+import '../../vehicle/widgets/form_section_card.dart';
 import '../../vehicle/widgets/vehicle_form_field.dart';
+import '../controllers/home_tab_controller.dart';
+import '../controllers/inbox_controller.dart';
 import '../controllers/profile_controller.dart';
+
+const _danger = Color(0xFFE5675E);
 
 class ProfileView extends BoundView<ProfileController> {
   const ProfileView({super.key});
@@ -17,11 +26,7 @@ class ProfileView extends BoundView<ProfileController> {
   @override
   Widget buildWith(BuildContext context, ProfileController controller) {
     return Obx(() {
-      if (controller.isLoading.value) {
-        return Center(
-          child: CircularProgressIndicator(color: AppColors.yellow, strokeWidth: 2.5),
-        );
-      }
+      if (controller.isLoading.value) return const _LoadingState();
       return _ProfileForm(
         controller: controller,
         phone: controller.phoneNumber.value,
@@ -30,6 +35,425 @@ class ProfileView extends BoundView<ProfileController> {
     });
   }
 }
+
+class _ProfileForm extends StatelessWidget {
+  const _ProfileForm({required this.controller, required this.phone, required this.cnic});
+
+  final ProfileController controller;
+  final String phone;
+  final String cnic;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      // The bottom inset clears the floating nav dock.
+      padding: EdgeInsets.fromLTRB(20, 8, 20, 40 + MediaQuery.paddingOf(context).bottom),
+      children: [
+        RiseIn(
+          order: 0,
+          child: Text(
+            'Profile',
+            style: AppTextStyles.headingLg.copyWith(color: AppColors.ink, fontSize: 28),
+          ),
+        ),
+        const SizedBox(height: 14),
+        RiseIn(order: 1, child: _HeroCard(controller: controller)),
+
+        // No exit animation on purpose: once permission is granted the
+        // banner is gone in the same frame.
+        Obx(
+          () => controller.notificationsPermitted.value
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: RiseIn(
+                    order: 2,
+                    child: _NotificationsOffBanner(onTapRecheck: controller.recheckNotificationPermission),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 14),
+
+        RiseIn(
+          order: 2,
+          child: FormSectionCard(
+            icon: Icons.person_outline_rounded,
+            title: 'Personal info',
+            children: [
+              VehicleFormField(
+                label: 'Full Name',
+                controller: controller.name,
+                fillColor: AppColors.background,
+                inputFormatters: nameInputFormatters,
+              ),
+              Obx(
+                () => AuthPrimaryButton(
+                  label: 'Save Changes',
+                  isLoading: controller.isSaving.value,
+                  onPressed: controller.save,
+                  height: 52,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        RiseIn(
+          order: 3,
+          child: FormSectionCard(
+            icon: Icons.verified_user_outlined,
+            title: 'Verified identity',
+            spacing: 12,
+            children: [
+              _LockedField(
+                icon: Icons.phone_iphone_rounded,
+                label: 'Phone number',
+                value: phone.isEmpty ? 'Not available' : phone,
+                note: "Can't be changed without re-verification",
+                verified: true,
+              ),
+              if (cnic.isNotEmpty)
+                // CNIC — read-only, used for identity verification only (FR-01.1).
+                _LockedField(
+                  icon: Icons.badge_outlined,
+                  label: 'CNIC',
+                  value: cnic,
+                  note: 'Used for identity verification only',
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        const RiseIn(order: 4, child: _AppearanceCard()),
+        const SizedBox(height: 14),
+
+        RiseIn(
+          order: 5,
+          child: FormSectionCard(
+            icon: Icons.manage_accounts_outlined,
+            title: 'Account',
+            spacing: 10,
+            children: [
+              _AccountAction(
+                icon: Icons.logout_rounded,
+                label: 'Log Out',
+                subtitle: 'Sign out of MoveMe on this phone',
+                onTap: controller.logout,
+              ),
+              Obx(
+                () => _AccountAction(
+                  icon: Icons.delete_outline_rounded,
+                  label: controller.isDeleting.value ? 'Deleting account…' : 'Delete Account',
+                  subtitle: 'Permanently remove your account and data',
+                  danger: true,
+                  busy: controller.isDeleting.value,
+                  onTap: controller.isDeleting.value ? null : controller.deleteAccount,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+        const RiseIn(order: 6, child: _Footer()),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hero
+// ---------------------------------------------------------------------------
+
+/// Accent card with the resident's avatar, live name (it follows the Full
+/// Name field as it's edited), verified badge, and a glance at their
+/// vehicles and conversations when those tabs are loaded.
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.yellow;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [accent, AppColors.accentDeep],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.3),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: DotGridBackground(color: Colors.white, center: Alignment(0.9, -0.6), radius: 1.2),
+          ),
+          Positioned(
+            right: -40,
+            top: -50,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller.name,
+              builder: (context, value, _) {
+                final name = value.text.trim();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _Avatar(initials: _initialsOf(name)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name.isEmpty ? 'Your name' : name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.headingLg.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  height: 1.15,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.verified_rounded, size: 14, color: Colors.white),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'Verified Resident',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.label.copyWith(
+                                          color: Colors.white,
+                                          letterSpacing: 0,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const _HeroStats(),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _initialsOf(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+  }
+}
+
+/// White initials disc inside a gradient ring that sweeps once around on
+/// arrival.
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduceMotion ? 1 : 0, end: 1),
+      duration: const Duration(milliseconds: 1400),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => CustomPaint(
+        painter: _RingPainter(progress: t),
+        child: child,
+      ),
+      child: Container(
+        width: 76,
+        height: 76,
+        padding: const EdgeInsets.all(5),
+        child: Container(
+          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+          alignment: Alignment.center,
+          child: initials.isEmpty
+              ? Icon(Icons.person_rounded, size: 32, color: AppColors.yellow)
+              : Text(
+                  initials,
+                  style: AppTextStyles.headingLg.copyWith(
+                    color: AppColors.accentDeep,
+                    fontSize: 24,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = (Offset.zero & size).deflate(1.5);
+    canvas.drawArc(
+      rect,
+      0,
+      2 * math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = Colors.white.withValues(alpha: 0.25),
+    );
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      2 * math.pi * progress,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.progress != progress;
+}
+
+/// Vehicles and conversations counts, read from the Home and Inbox tabs'
+/// existing listeners — shown only when those are loaded (the profile is
+/// also rendered standalone).
+class _HeroStats extends StatelessWidget {
+  const _HeroStats();
+
+  @override
+  Widget build(BuildContext context) {
+    final home = Get.isRegistered<HomeTabController>() ? Get.find<HomeTabController>() : null;
+    final inbox = Get.isRegistered<InboxController>() ? Get.find<InboxController>() : null;
+    if (home == null && inbox == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Obx(
+        () => Row(
+          children: [
+            if (home != null)
+              Expanded(
+                child: _StatPill(
+                  icon: Icons.directions_car_filled_rounded,
+                  value: home.vehicles.length,
+                  label: home.vehicles.length == 1 ? 'Vehicle' : 'Vehicles',
+                ),
+              ),
+            if (home != null && inbox != null) const SizedBox(width: 10),
+            if (inbox != null)
+              Expanded(
+                child: _StatPill(
+                  icon: Icons.forum_rounded,
+                  value: inbox.threads.length + inbox.sentThreads.length,
+                  label: inbox.threads.length + inbox.sentThreads.length == 1 ? 'Conversation' : 'Conversations',
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  const _StatPill({required this.icon, required this.value, required this.label});
+
+  final IconData icon;
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: Colors.white),
+          const SizedBox(width: 8),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: value.toDouble()),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text(
+              '${v.round()}',
+              style: AppTextStyles.headingSm.copyWith(color: Colors.white, fontSize: 17),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications banner
+// ---------------------------------------------------------------------------
 
 /// Only shown while [ProfileController.notificationsPermitted] is false.
 ///
@@ -46,17 +470,27 @@ class _NotificationsOffBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = AppColors.yellow;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2210),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.yellow.withValues(alpha: 0.4)),
+        color: Color.alphaBlend(accent.withValues(alpha: 0.1), AppColors.surface),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.notifications_off_outlined, color: AppColors.yellow, size: 20),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: accent.withValues(alpha: 0.15),
+            ),
+            child: Icon(Icons.notifications_off_outlined, color: accent, size: 19),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -69,16 +503,32 @@ class _NotificationsOffBanner extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   "You won't be alerted when someone messages you. Enable "
-                  'notifications for ParkTag in your phone\'s Settings app, '
+                  'notifications for MoveMe in your phone\'s Settings app, '
                   'then come back here.',
                   style: AppTextStyles.subtitle.copyWith(color: AppColors.muted, fontSize: 12.5, height: 1.4),
                 ),
-                const SizedBox(height: 8),
-                GestureDetector(
+                const SizedBox(height: 10),
+                Pressable(
                   onTap: onTapRecheck,
-                  child: Text(
-                    "I've enabled it — check again",
-                    style: AppTextStyles.linkTextEmphasis.copyWith(color: AppColors.yellow, fontSize: 12.5),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.refresh_rounded, size: 15, color: Colors.white),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            "I've enabled it — check again",
+                            style: AppTextStyles.linkTextEmphasis.copyWith(color: Colors.white, fontSize: 12.5),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -90,51 +540,195 @@ class _NotificationsOffBanner extends StatelessWidget {
   }
 }
 
-/// Lets the resident switch between the app's dark (default) and light
-/// palettes — [ThemeController] persists the choice and repaints every
-/// screen via [Get.forceAppUpdate].
-class _ThemeToggleRow extends StatelessWidget {
-  const _ThemeToggleRow();
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+class _LockedField extends StatelessWidget {
+  const _LockedField({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.note,
+    this.verified = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String note;
+  final bool verified;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('THEME', style: AppTextStyles.label.copyWith(color: AppColors.muted, letterSpacing: 0.4)),
-          const SizedBox(height: 10),
-          Obx(() {
-            final mode = ThemeController.to.mode.value;
-            return Row(
-              children: [
-                _ThemeOption(
-                  icon: Icons.light_mode_outlined,
-                  label: 'Light',
-                  selected: mode == AppThemeMode.light,
-                  onTap: () => ThemeController.to.setMode(AppThemeMode.light),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 8),
-                _ThemeOption(
-                  icon: Icons.dark_mode_outlined,
-                  label: 'Dark',
-                  selected: mode == AppThemeMode.dark,
-                  onTap: () => ThemeController.to.setMode(AppThemeMode.dark),
+                child: Icon(icon, size: 17, color: AppColors.muted),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label.toUpperCase(),
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.muted,
+                        fontSize: 10.5,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      style: AppTextStyles.fieldValue.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _ThemeOption(
-                  icon: Icons.brightness_auto_outlined,
-                  label: 'Auto',
-                  selected: mode == AppThemeMode.system,
-                  onTap: () => ThemeController.to.setMode(AppThemeMode.system),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
+              ),
+              if (verified)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.successSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.successBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_rounded, size: 12, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Verified',
+                        style: AppTextStyles.overline.copyWith(
+                          color: AppColors.success,
+                          letterSpacing: 0.2,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.faint),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Text(
+            note,
+            style: AppTextStyles.caption.copyWith(color: AppColors.faint, fontSize: 11.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Appearance
+// ---------------------------------------------------------------------------
+
+/// Lets the resident switch between the app's dark (default) and light
+/// palettes — [ThemeController] persists the choice and repaints every
+/// screen via [Get.forceAppUpdate]. A sliding highlight marks the choice.
+class _AppearanceCard extends StatelessWidget {
+  const _AppearanceCard();
+
+  static const _modes = [
+    (mode: AppThemeMode.light, icon: Icons.light_mode_rounded, label: 'Light'),
+    (mode: AppThemeMode.dark, icon: Icons.dark_mode_rounded, label: 'Dark'),
+    (mode: AppThemeMode.system, icon: Icons.brightness_auto_rounded, label: 'Auto'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.yellow;
+
+    return FormSectionCard(
+      icon: Icons.palette_outlined,
+      title: 'Appearance',
+      children: [
+        Obx(() {
+          final mode = ThemeController.to.mode.value;
+          final index = _modes.indexWhere((m) => m.mode == mode);
+
+          return Container(
+            height: 76,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final segment = constraints.maxWidth / _modes.length;
+                return Stack(
+                  children: [
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 380),
+                      curve: Curves.easeOutBack,
+                      left: index * segment,
+                      width: segment,
+                      top: 0,
+                      bottom: 0,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: LinearGradient(colors: [accent, AppColors.accentDeep]),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        for (final m in _modes)
+                          Expanded(
+                            child: _ThemeOption(
+                              icon: m.icon,
+                              label: m.label,
+                              selected: m.mode == mode,
+                              onTap: () => ThemeController.to.setMode(m.mode),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          );
+        }),
+      ],
     );
   }
 }
@@ -149,27 +743,41 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    final fg = selected ? Colors.white : AppColors.muted;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label theme',
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.yellow.withValues(alpha: 0.14) : AppColors.background,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: selected ? AppColors.yellow : AppColors.border, width: 1.5),
-          ),
+        behavior: HitTestBehavior.opaque,
+        child: ExcludeSemantics(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: selected ? AppColors.yellow : AppColors.muted),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style: AppTextStyles.label.copyWith(
-                  color: selected ? AppColors.yellow : AppColors.muted,
-                  letterSpacing: 0,
-                  fontSize: 11.5,
+              // Spins in when picked.
+              TweenAnimationBuilder<double>(
+                key: ValueKey(selected),
+                tween: Tween(begin: selected ? -0.5 : 0, end: 0),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutBack,
+                builder: (context, turns, child) => Transform.rotate(
+                  angle: turns * 2 * math.pi,
+                  child: child,
                 ),
+                child: Icon(icon, size: 21, color: fg),
+              ),
+              const SizedBox(height: 5),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
+                style: AppTextStyles.label.copyWith(
+                  color: fg,
+                  letterSpacing: 0,
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+                child: Text(label),
               ),
             ],
           ),
@@ -179,209 +787,171 @@ class _ThemeOption extends StatelessWidget {
   }
 }
 
-class _ProfileForm extends StatelessWidget {
-  const _ProfileForm({required this.controller, required this.phone, required this.cnic});
+// ---------------------------------------------------------------------------
+// Account
+// ---------------------------------------------------------------------------
 
-  final ProfileController controller;
-  final String phone;
-  final String cnic;
+class _AccountAction extends StatelessWidget {
+  const _AccountAction({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.danger = false,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final bool danger;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    final initials = _initialsOf(controller.name.text);
+    final color = danger ? _danger : AppColors.ink;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-      children: [
-        Text(
-          'Profile',
-          style: AppTextStyles.headingLg.copyWith(color: AppColors.ink, fontSize: 24),
-        ),
-        const SizedBox(height: 16),
-        Obx(
-          () => controller.notificationsPermitted.value
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: _NotificationsOffBanner(onTapRecheck: controller.recheckNotificationPermission),
-                ),
-        ),
-        const SizedBox(height: 6),
-
-        // Identity
-        Row(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(color: Color(0xFF2A2210), shape: BoxShape.circle),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: AppTextStyles.headingSm.copyWith(color: AppColors.yellow, fontSize: 22),
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    controller.name.text,
-                    style: AppTextStyles.fieldValue.copyWith(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle, size: 13, color: AppColors.success),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Verified Resident',
-                        style: AppTextStyles.label.copyWith(color: AppColors.success, letterSpacing: 0),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
-
-        VehicleFormField(label: 'Full Name', controller: controller.name, inputFormatters: nameInputFormatters),
-        const SizedBox(height: 18),
-
-        // Phone — read-only, verified
-        Text('PHONE NUMBER', style: AppTextStyles.label.copyWith(color: AppColors.muted, letterSpacing: 0.4)),
-        const SizedBox(height: 7),
-        Container(
-          padding: const EdgeInsets.all(14),
+    return Semantics(
+      button: true,
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
+            color: danger ? _danger.withValues(alpha: 0.07) : AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: danger ? _danger.withValues(alpha: 0.3) : Colors.transparent),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                phone.isEmpty ? 'Not available' : phone,
-                style: AppTextStyles.fieldValue.copyWith(color: AppColors.muted, fontWeight: FontWeight.w600),
-              ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: AppColors.successSurface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.successBorder),
+                  color: danger ? _danger.withValues(alpha: 0.14) : AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: busy
+                    ? const Padding(
+                        padding: EdgeInsets.all(11),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _danger),
+                      )
+                    : Icon(icon, size: 19, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.check, size: 11, color: AppColors.success),
-                    const SizedBox(width: 5),
-                    Text('Verified', style: AppTextStyles.overline.copyWith(color: AppColors.success, letterSpacing: 0.2, fontSize: 11)),
+                    Text(label, style: AppTextStyles.buttonLabel.copyWith(color: color, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.muted, fontSize: 11.5),
+                    ),
                   ],
                 ),
               ),
+              Icon(Icons.chevron_right_rounded, color: danger ? _danger : AppColors.faint),
             ],
           ),
         ),
-        const SizedBox(height: 6),
+      ),
+    );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  const _Footer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Opacity(
+            opacity: 0.85,
+            child: Image.asset('assets/Applogo.png', width: 34, height: 34),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text.rich(
+          TextSpan(
+            style: AppTextStyles.headingSm.copyWith(color: AppColors.muted, fontSize: 14),
+            children: [
+              const TextSpan(text: 'Move'),
+              TextSpan(text: 'Me', style: TextStyle(color: AppColors.yellow)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
         Text(
-          "Can't be changed without re-verification",
-          style: AppTextStyles.caption.copyWith(color: AppColors.faint, fontSize: 11.5),
-        ),
-        const SizedBox(height: 18),
-
-        if (cnic.isNotEmpty) ...[
-          // CNIC — read-only, used for identity verification only (FR-01.1).
-          Text('CNIC', style: AppTextStyles.label.copyWith(color: AppColors.muted, letterSpacing: 0.4)),
-          const SizedBox(height: 7),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              cnic,
-              style: AppTextStyles.fieldValue.copyWith(color: AppColors.muted, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Used for identity verification only',
-            style: AppTextStyles.caption.copyWith(color: AppColors.faint, fontSize: 11.5),
-          ),
-          const SizedBox(height: 18),
-        ],
-
-        Obx(
-          () => AuthPrimaryButton(
-            label: 'Save Changes',
-            isLoading: controller.isSaving.value,
-            onPressed: controller.save,
-            height: 52,
-          ),
-        ),
-
-        const SizedBox(height: 28),
-        Divider(color: AppColors.faint.withValues(alpha: 0.3), height: 1),
-        const SizedBox(height: 28),
-
-        const _ThemeToggleRow(),
-        const SizedBox(height: 28),
-
-        GestureDetector(
-          onTap: controller.logout,
-          child: Container(
-            height: 52,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border, width: 1.5),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.logout, size: 17, color: AppColors.ink),
-                const SizedBox(width: 8),
-                Text('Log Out', style: AppTextStyles.buttonLabel.copyWith(color: AppColors.ink, fontSize: 15)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        GestureDetector(
-          onTap: controller.deleteAccount,
-          child: Container(
-            height: 52,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF3A2323), width: 1.5),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.delete_outline, size: 17, color: Color(0xFFE5675E)),
-                const SizedBox(width: 8),
-                Text(
-                  'Delete Account',
-                  style: AppTextStyles.buttonLabel.copyWith(color: const Color(0xFFE5675E), fontSize: 15),
-                ),
-              ],
-            ),
-          ),
+          'Scan. Message. Move on.',
+          style: AppTextStyles.caption.copyWith(color: AppColors.faint),
         ),
       ],
     );
   }
+}
 
-  static String _initialsOf(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+// ---------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------
+
+/// Skeleton in the page's own shape, instead of a bare spinner.
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget card(double height) => Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+    );
+
+    return Shimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        children: [
+          const Align(alignment: Alignment.centerLeft, child: ShimmerBox(width: 110, height: 26)),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Row(
+              children: [
+                ShimmerBox(width: 76, height: 76, radius: 38),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerBox(width: 140, height: 18),
+                      SizedBox(height: 10),
+                      ShimmerBox(width: 110, height: 22, radius: 11),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          card(170),
+          const SizedBox(height: 14),
+          card(190),
+        ],
+      ),
+    );
   }
 }

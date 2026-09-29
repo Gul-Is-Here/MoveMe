@@ -74,6 +74,9 @@ void main() {
     await tester.pumpWidget(const GetMaterialApp(home: EditVehicleView()));
     await tester.pump();
 
+    // The live preview card pushes this field below the test viewport.
+    await tester.ensureVisible(find.widgetWithText(TextField, '02 Apr 2021'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextField, '02 Apr 2021'));
     await tester.pumpAndSettle();
 

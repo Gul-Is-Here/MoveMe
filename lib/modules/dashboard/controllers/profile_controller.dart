@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/services/auth_service.dart';
 import '../../../app/services/push_notification_service.dart';
+import '../../../app/utils/app_logger.dart';
 import '../widgets/delete_account_dialog.dart';
 import '../../../app/widgets/app_snackbar.dart';
 
@@ -17,6 +18,7 @@ class ProfileController extends GetxController {
   final cnic = ''.obs;
   final isLoading = true.obs;
   final isSaving = false.obs;
+  final isDeleting = false.obs;
 
   /// False if the resident denied (or has not yet granted) notification
   /// permission — surfaced so "no notifications" is visibly explained
@@ -81,21 +83,32 @@ class ProfileController extends GetxController {
     await _pushService.unregisterToken();
     await _authService.signOut();
     Get.offAllNamed(AppRoutes.login);
-    AppSnackbar.show('Logged out', "You've been signed out of ParkTag.");
+    AppSnackbar.show('Logged out', "You've been signed out of MoveMe.");
   }
 
   Future<void> deleteAccount() async {
     final confirmed = await Get.dialog<bool>(const DeleteAccountDialog());
     if (confirmed != true) return;
 
-    await _pushService.unregisterToken();
     final uid = _authService.currentUid;
-    if (uid != null) {
+    if (uid == null || isDeleting.value) return;
+
+    isDeleting.value = true;
+    try {
       await _authService.deleteResidentAccount(uid);
+    } catch (e, stack) {
+      AppLogger.error('ProfileController', e, stack);
+      if (!isClosed) isDeleting.value = false;
+      AppSnackbar.show(
+        "Couldn't delete account",
+        'Please check your connection and try again. Nothing was removed from your sign-in.',
+      );
+      return;
     }
+
     await _authService.signOut();
     Get.offAllNamed(AppRoutes.login);
-    AppSnackbar.show('Account deleted', 'All your data has been removed.');
+    AppSnackbar.show('Account deleted', 'Your account and all its data have been permanently removed.');
   }
 
   @override

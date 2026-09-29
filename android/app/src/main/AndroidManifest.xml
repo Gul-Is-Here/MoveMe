@@ -4,8 +4,11 @@
          chat-message pushes (FR-05/FR-06). firebase_messaging's
          requestPermission() call handles the runtime prompt. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Chat voice messages: the `record` package's own permission request
+         handles the runtime prompt. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
-        android:label="Park Tag"
+        android:label="MoveMe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

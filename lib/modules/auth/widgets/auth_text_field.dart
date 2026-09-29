@@ -3,85 +3,60 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
+import 'auth_field_shell.dart';
 
 class AuthTextField extends StatelessWidget {
   const AuthTextField({
     super.key,
     required this.label,
     required this.controller,
+    required this.icon,
     this.hint,
     this.helper,
     this.keyboardType,
     this.textCapitalization = TextCapitalization.none,
     this.inputFormatters,
+    this.textInputAction,
+    this.onSubmitted,
+    this.isComplete,
   });
 
   final String label;
   final String? hint;
   final String? helper;
   final TextEditingController controller;
+  final IconData icon;
   final TextInputType? keyboardType;
   final TextCapitalization textCapitalization;
 
   /// Restricts what can be typed or pasted into the field.
   final List<TextInputFormatter>? inputFormatters;
 
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  /// When set, a check appears once this returns true for the text.
+  final bool Function(String text)? isComplete;
+
   @override
   Widget build(BuildContext context) {
-    final labelStyle = AppTextStyles.label.copyWith(color: AppColors.muted);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text.rich(
-          TextSpan(
-            text: label.toUpperCase(),
-            style: labelStyle,
-            children: helper == null
-                ? null
-                : [
-                    TextSpan(
-                      text: '  $helper',
-                      style: labelStyle.copyWith(
-                        color: AppColors.faint,
-                        letterSpacing: 0,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 52,
-          child: TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            textCapitalization: textCapitalization,
-            inputFormatters: inputFormatters,
-            style: AppTextStyles.fieldValue.copyWith(color: AppColors.ink),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: AppTextStyles.manropeBase.copyWith(color: AppColors.faint),
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: AppColors.border, width: 1.5),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: AppColors.border, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: AppColors.yellow, width: 1.5),
-              ),
-            ),
-          ),
-        ),
-      ],
+    return AuthFieldShell(
+      label: label,
+      helper: helper,
+      controller: controller,
+      isComplete: isComplete,
+      leading: Icon(icon),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
+        inputFormatters: inputFormatters,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
+        cursorColor: AppColors.yellow,
+        style: AppTextStyles.fieldValue.copyWith(color: AppColors.ink),
+        decoration: authBareInputDecoration(hint),
+      ),
     );
   }
 }

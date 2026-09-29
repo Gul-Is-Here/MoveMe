@@ -1,1 +1,85 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"car-ping-9d4f8","appId":"1:391458076633:android:80be9faf86b18f26fbcbc8","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"car-ping-9d4f8","appId":"1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"car-ping-9d4f8","appId":"1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"car-ping-9d4f8","configurations":{"android":"1:391458076633:android:80be9faf86b18f26fbcbc8","ios":"1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8","macos":"1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8","web":"1:391458076633:web:0059354723ff9a08fbcbc8","windows":"1:391458076633:web:ad9e7dd0183e29acfbcbc8"}}}}},"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","!**/.well-known/**","**/node_modules/**"],"headers":[{"source":"/.well-known/apple-app-site-association","headers":[{"key":"Content-Type","value":"application/json"}]}],"rewrites":[{"source":"**","destination":"/index.html"}]},"functions":[{"source":"functions","codebase":"default","disallowLegacyRuntimeConfig":true,"ignore":["node_modules",".git","firebase-debug.log","firebase-debug.*.log","*.local"]}]}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "moveme-da262",
+          "appId": "1:709693784542:android:dfaa359dd3763af9209d4f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "moveme-da262",
+          "appId": "1:709693784542:ios:6190486579eb9bc9209d4f",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "moveme-da262",
+          "appId": "1:709693784542:ios:6190486579eb9bc9209d4f",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "moveme-da262",
+          "configurations": {
+            "android": "1:709693784542:android:dfaa359dd3763af9209d4f",
+            "ios": "1:709693784542:ios:6190486579eb9bc9209d4f",
+            "macos": "1:709693784542:ios:6190486579eb9bc9209d4f",
+            "web": "1:709693784542:web:74ee7b6199475ac0209d4f",
+            "windows": "1:709693784542:web:3c01adf42e325e4b209d4f"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "!**/.well-known/**",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "functions": [
+    {
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "source": "functions"
+    }
+  ]
+}

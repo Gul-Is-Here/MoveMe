@@ -28,6 +28,7 @@ class ChatMessageModel {
     required this.timeLabel,
     this.text = '',
     this.voiceDuration = '',
+    this.audioUrl,
     this.status = ChatMessageStatus.sent,
     this.createdAt,
     this.localId,
@@ -38,6 +39,10 @@ class ChatMessageModel {
   final String timeLabel;
   final String text;
   final String voiceDuration;
+
+  /// Firebase Storage download URL for a [ChatMessageKind.voice] message.
+  /// Null for an optimistic voice message still uploading.
+  final String? audioUrl;
 
   /// Only meaningful for messages this device sent.
   final ChatMessageStatus status;
@@ -50,12 +55,13 @@ class ChatMessageModel {
   /// right one.
   final String? localId;
 
-  ChatMessageModel copyWith({ChatMessageStatus? status}) => ChatMessageModel(
+  ChatMessageModel copyWith({ChatMessageStatus? status, String? audioUrl}) => ChatMessageModel(
     sender: sender,
     kind: kind,
     timeLabel: timeLabel,
     text: text,
     voiceDuration: voiceDuration,
+    audioUrl: audioUrl ?? this.audioUrl,
     status: status ?? this.status,
     createdAt: createdAt,
     localId: localId,

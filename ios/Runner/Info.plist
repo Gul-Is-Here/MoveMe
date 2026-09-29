@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Park Tag</string>
+	<string>MoveMe</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,9 +48,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>ParkTag needs camera access to scan your RC card and photograph your vehicle.</string>
+	<string>MoveMe needs camera access to scan your RC card and photograph your vehicle.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ParkTag needs photo library access to add photos of your vehicle.</string>
+	<string>MoveMe needs photo library access to add photos of your vehicle.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MoveMe needs microphone access to record voice messages in chat.</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

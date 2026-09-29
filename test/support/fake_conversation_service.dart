@@ -141,7 +141,7 @@ class FakeConversationService implements ConversationService {
   }) async {
     final vehicle = vehicles[vehicleId];
     if (vehicle == null) {
-      throw const ResolveVehicleException("This QR code doesn't match a ParkTag vehicle.");
+      throw const ResolveVehicleException("This QR code doesn't match a MoveMe vehicle.");
     }
     if (vehicle.ownerUid == callerUid) {
       throw const ResolveVehicleException("This is your own vehicle — nothing to message.");
@@ -230,6 +230,50 @@ class FakeConversationService implements ConversationService {
     }
     _messages.putIfAbsent(conversationId, () => []).add(
       ConversationMessage(sender: MessageSender.scanner, text: text, createdAt: DateTime.now()),
+    );
+    _emit();
+  }
+
+  /// Test count of voice messages sent, keyed by conversation — asserted
+  /// on instead of a real Storage upload/download URL.
+  final voiceMessagesSent = <String, int>{};
+
+  @override
+  Future<void> sendOwnerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) async {
+    voiceMessagesSent.update(conversationId, (n) => n + 1, ifAbsent: () => 1);
+    _messages.putIfAbsent(conversationId, () => []).add(
+      ConversationMessage(
+        sender: MessageSender.owner,
+        text: '',
+        createdAt: DateTime.now(),
+        kind: MessageKind.voice,
+        audioUrl: 'fake://$localFilePath',
+        durationSeconds: durationSeconds,
+      ),
+    );
+    _emit();
+  }
+
+  @override
+  Future<void> sendAuthenticatedScannerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) async {
+    voiceMessagesSent.update(conversationId, (n) => n + 1, ifAbsent: () => 1);
+    _messages.putIfAbsent(conversationId, () => []).add(
+      ConversationMessage(
+        sender: MessageSender.scanner,
+        text: '',
+        createdAt: DateTime.now(),
+        kind: MessageKind.voice,
+        audioUrl: 'fake://$localFilePath',
+        durationSeconds: durationSeconds,
+      ),
     );
     _emit();
   }

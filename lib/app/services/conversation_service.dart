@@ -1,7 +1,15 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 enum MessageSender { owner, scanner }
+
+/// Mirrors [ChatMessageKind] at the service layer — kept separate so this
+/// file never has to import a UI model. A message document with no `kind`
+/// field (every one written before voice messages existed) reads as text.
+enum MessageKind { text, voice }
 
 /// A vehicle's QR sticker is scanned by many different people — each one
 /// must get their own private thread with the owner, not walk into a
@@ -104,11 +112,27 @@ class ResolveVehicleException implements Exception {
 }
 
 class ConversationMessage {
-  const ConversationMessage({required this.sender, required this.text, required this.createdAt});
+  const ConversationMessage({
+    required this.sender,
+    required this.text,
+    required this.createdAt,
+    this.kind = MessageKind.text,
+    this.audioUrl,
+    this.durationSeconds = 0,
+  });
 
   final MessageSender sender;
   final String text;
   final DateTime? createdAt;
+  final MessageKind kind;
+
+  /// Firebase Storage download URL — only set when [kind] is
+  /// [MessageKind.voice].
+  final String? audioUrl;
+
+  /// Recording length, rounded to whole seconds — only meaningful when
+  /// [kind] is [MessageKind.voice].
+  final int durationSeconds;
 }
 
 /// Wraps the Firestore `conversations` collection — the messaging thread a
@@ -180,6 +204,22 @@ abstract class ConversationService {
   /// for the anonymous web case, just for a signed-in participant instead.
   Future<void> sendAuthenticatedScannerReply({required String conversationId, required String text});
 
+  /// Uploads the recorded audio at [localFilePath] to Storage and appends
+  /// it as an owner voice message — the voice-message counterpart of
+  /// [sendOwnerReply].
+  Future<void> sendOwnerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  });
+
+  /// The voice-message counterpart of [sendAuthenticatedScannerReply].
+  Future<void> sendAuthenticatedScannerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  });
+
   /// Either side can toggle this — the scanner from the web page (FR-07.2),
   /// the resident from the Chat screen.
   Future<void> setResolved({required String conversationId, required bool resolved});
@@ -236,7 +276,7 @@ class FirebaseConversationService implements ConversationService {
       final data = Map<String, dynamic>.from(result.data as Map);
       return ResolvedChat(
         conversationId: data['conversationId'] as String,
-        ownerName: data['ownerName'] as String? ?? 'A ParkTag resident',
+        ownerName: data['ownerName'] as String? ?? 'A MoveMe resident',
         plateNumber: data['plateNumber'] as String? ?? '',
         colorName: data['colorName'] as String? ?? '',
         resolved: data['resolved'] as bool? ?? false,
@@ -263,6 +303,9 @@ class FirebaseConversationService implements ConversationService {
           sender: data['sender'] == 'owner' ? MessageSender.owner : MessageSender.scanner,
           text: data['text'] as String? ?? '',
           createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+          kind: data['kind'] == 'voice' ? MessageKind.voice : MessageKind.text,
+          audioUrl: data['audioUrl'] as String?,
+          durationSeconds: data['durationSeconds'] as int? ?? 0,
         );
       }).toList(),
     );
@@ -335,6 +378,78 @@ class FirebaseConversationService implements ConversationService {
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Shared by [sendOwnerVoiceMessage] and
+  /// [sendAuthenticatedScannerVoiceMessage] — everything except the
+  /// `sender` value and which unread counters flip is identical.
+  Future<void> _sendVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+    required String sender,
+    required Map<String, dynamic> conversationPatch,
+  }) async {
+    final ref = FirebaseStorage.instance.ref(
+      'conversations/$conversationId/voice/${DateTime.now().microsecondsSinceEpoch}.m4a',
+    );
+    await ref.putFile(File(localFilePath));
+    final audioUrl = await ref.getDownloadURL();
+
+    final docRef = _conversations.doc(conversationId);
+    await docRef.set({
+      'lastMessagePreview': '🎤 Voice message',
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      ...conversationPatch,
+    }, SetOptions(merge: true));
+    await docRef.collection('messages').add({
+      'sender': sender,
+      'kind': 'voice',
+      'audioUrl': audioUrl,
+      'durationSeconds': durationSeconds,
+      'text': '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> sendOwnerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) {
+    return _sendVoiceMessage(
+      conversationId: conversationId,
+      localFilePath: localFilePath,
+      durationSeconds: durationSeconds,
+      sender: 'owner',
+      conversationPatch: {
+        'unreadForOwner': false,
+        'unreadForScanner': true,
+        'unreadCountForOwner': 0,
+        'unreadCountForScanner': FieldValue.increment(1),
+      },
+    );
+  }
+
+  @override
+  Future<void> sendAuthenticatedScannerVoiceMessage({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) {
+    return _sendVoiceMessage(
+      conversationId: conversationId,
+      localFilePath: localFilePath,
+      durationSeconds: durationSeconds,
+      sender: 'scanner',
+      conversationPatch: {
+        'unreadForOwner': true,
+        'unreadForScanner': false,
+        'unreadCountForOwner': FieldValue.increment(1),
+        'unreadCountForScanner': 0,
+      },
+    );
   }
 
   @override

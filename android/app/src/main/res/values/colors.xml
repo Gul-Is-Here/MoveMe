@@ -3,4 +3,5 @@
     <!-- ParkTag brand yellow (AppColors.yellow), used to tint the
          notification icon and accent in the tray. -->
     <color name="notification_accent">#F4C21B</color>
+	<color name="ic_launcher_background">#FFF4E6</color>
 </resources>

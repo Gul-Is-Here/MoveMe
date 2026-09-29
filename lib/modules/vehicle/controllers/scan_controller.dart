@@ -67,6 +67,13 @@ class ScanController extends GetxController {
     isChoosing.value = false;
   }
 
+  /// Back from the capture screen to the scan / enter-manually choice.
+  /// Already-captured sides are kept in case the resident comes back.
+  void backToChoice() {
+    errorMessage.value = null;
+    isChoosing.value = true;
+  }
+
   Future<void> scanSide(RcCardSide side) async {
     if (!Platform.isAndroid) {
       isScannerUnavailable.value = true;

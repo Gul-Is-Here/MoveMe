@@ -242,6 +242,7 @@ void main() {
                   ? Get.find<DashboardController>().unreadMessageCount
                   : 0,
               onTap: (_) {},
+              onAddVehicle: () {},
             ),
           ),
         ),

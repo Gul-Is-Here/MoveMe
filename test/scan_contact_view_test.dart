@@ -91,6 +91,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text("This QR code doesn't match a ParkTag vehicle"), findsOneWidget);
+    expect(find.text("This QR code doesn't match a MoveMe vehicle"), findsOneWidget);
   });
 }

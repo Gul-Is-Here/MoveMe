@@ -47,14 +47,11 @@ void main() {
 
     await pumpSplash(tester);
 
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is RichText && widget.text.toPlainText() == 'ParkTag',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Scan. Message. Move on.'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // The wordmark and tagline animate in letter by letter / word by word,
+    // so they're asserted by their accessible labels rather than one Text.
+    expect(find.bySemanticsLabel('MoveMe'), findsOneWidget);
+    expect(find.bySemanticsLabel('Scan. Message. Move on.'), findsOneWidget);
+    expect(find.text('GETTING THINGS READY'), findsOneWidget);
 
     // Flush the SplashController's pending navigation timer.
     await tester.pump(const Duration(seconds: 3));

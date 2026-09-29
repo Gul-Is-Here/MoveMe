@@ -143,6 +143,17 @@ class InboxController extends GetxController {
     }
   }
 
+  /// Marks one conversation read from whichever side this resident is on
+  /// in it — the swipe action on an Inbox row.
+  void markThreadRead(MessageThreadModel thread) {
+    if (thread.unreadCount == 0) return;
+    if (thread.viewerRole == ThreadViewerRole.owner) {
+      _conversationService.markReadByOwner(thread.conversationId);
+    } else {
+      _conversationService.markReadByScanner(thread.conversationId);
+    }
+  }
+
   MessageThreadModel _toOwnerThread(ConversationSummary summary) => MessageThreadModel(
     conversationId: summary.conversationId,
     scannerName: summary.scannerName,

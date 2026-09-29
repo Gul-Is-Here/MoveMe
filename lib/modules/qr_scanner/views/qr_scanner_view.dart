@@ -87,7 +87,7 @@ class QrScannerView extends GetView<QrScannerController> {
               return Column(
                 children: [
                   Text(
-                    "Scan a car's ParkTag sticker",
+                    "Scan a car's MoveMe sticker",
                     style: AppTextStyles.headingSm.copyWith(color: Colors.white, fontSize: 17),
                   ),
                   const SizedBox(height: 6),
@@ -164,7 +164,7 @@ class _CameraError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = error.errorCode == MobileScannerErrorCode.permissionDenied
-        ? "ParkTag needs camera access to scan a QR code. Enable it in your device's Settings."
+        ? "MoveMe needs camera access to scan a QR code. Enable it in your device's Settings."
         : "Couldn't start the camera. Please try again.";
 
     return Container(

@@ -18,21 +18,22 @@ class DashboardView extends BoundView<DashboardController> {
   Widget buildWith(BuildContext context, DashboardController controller) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      // The nav is a floating, frosted dock — content scrolls behind it, and
+      // each tab pads its scroll end by MediaQuery's bottom inset to clear it.
+      extendBody: true,
       body: SafeArea(
-        child: Obx(() => IndexedStack(index: controller.tabIndex.value, children: _tabs)),
+        bottom: false,
+        child: Obx(() {
+          final index = controller.tabIndex.value;
+          return IndexedStack(
+            index: index,
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                _TabEntrance(active: i == index, child: _tabs[i]),
+            ],
+          );
+        }),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: controller.openAddVehicle,
-        backgroundColor: AppColors.yellow,
-        foregroundColor: AppColors.background,
-        elevation: 2,
-        shape: const CircleBorder(),
-        // Adding a vehicle (RC card capture -> OCR) — the QR-to-chat
-        // scanner is the separate icon at the top of the Home tab, so this
-        // one intentionally isn't a QR icon.
-        child: const Icon(Icons.add_a_photo_outlined, size: 26),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Obx(
         () => DashboardBottomNav(
           selectedIndex: controller.tabIndex.value,
@@ -40,7 +41,56 @@ class DashboardView extends BoundView<DashboardController> {
           // when the Inbox controller (and therefore the count) is absent.
           unreadCount: controller.hasUnreadSource ? controller.unreadMessageCount : 0,
           onTap: controller.changeTab,
+          onAddVehicle: controller.openAddVehicle,
         ),
+      ),
+    );
+  }
+}
+
+/// Fades and lifts a tab in each time it becomes the active one. The
+/// [IndexedStack] keeps every tab alive (scroll position, listeners), so
+/// only the arrival is animated — never a rebuild.
+class _TabEntrance extends StatefulWidget {
+  const _TabEntrance({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_TabEntrance> createState() => _TabEntranceState();
+}
+
+class _TabEntranceState extends State<_TabEntrance> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: 1,
+  );
+  late final _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+
+  @override
+  void didUpdateWidget(_TabEntrance old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active && !MediaQuery.of(context).disableAnimations) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _curve,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, 0.02), end: Offset.zero).animate(_curve),
+        child: widget.child,
       ),
     );
   }

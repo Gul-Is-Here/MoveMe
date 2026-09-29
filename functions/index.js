@@ -8,6 +8,7 @@ const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
 
 setGlobalOptions({ maxInstances: 10 });
 
@@ -479,7 +480,7 @@ exports.requestPhoneOtp = onCall({ secrets: [smsApiKey] }, async (request) => {
   });
 
   try {
-    await sendSms(phone, `Your Park Tag verification code is ${code}. It expires in 5 minutes.`);
+    await sendSms(phone, `Your MoveMe verification code is ${code}. It expires in 5 minutes.`);
   } catch (err) {
     logger.error(`requestPhoneOtp: SMS send failed for ${phone}: ${err}`);
     await ref.update({ hash: FieldValue.delete() });
@@ -522,4 +523,52 @@ exports.verifyPhoneOtp = onCall(async (request) => {
     uid = (await auth.createUser({ phoneNumber: phone })).uid;
   }
   return { token: await auth.createCustomToken(uid) };
+});
+
+/**
+ * Permanently deletes the signed-in resident and everything tied to them:
+ * profile (incl. FCM tokens), vehicles (private + public QR copies), vehicle
+ * and RC-card photos, every conversation they own or joined as a scanner
+ * (messages + voice notes), their OTP record, and finally the Auth user.
+ *
+ * Runs server-side because a client can't delete other rows/files under the
+ * security rules, and a client-side `user.delete()` fails with
+ * `requires-recent-login` once the sign-in is more than a few minutes old.
+ * The Auth user is deleted last, so a partial failure can simply be retried.
+ */
+exports.deleteAccount = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Must be signed in to delete your account.");
+  }
+
+  const auth = getAuth();
+  const bucket = getStorage().bucket();
+  const userRecord = await auth.getUser(uid).catch(() => null);
+
+  const [owned, scanned] = await Promise.all([
+    db.collection("conversations").where("ownerUid", "==", uid).get(),
+    db.collection("conversations").where("scannerUid", "==", uid).get(),
+  ]);
+  const conversationIds = new Set([...owned.docs, ...scanned.docs].map((d) => d.id));
+  await Promise.all([...conversationIds].map(async (id) => {
+    await bucket.deleteFiles({ prefix: `conversations/${id}/` });
+    await db.recursiveDelete(db.collection("conversations").doc(id));
+  }));
+
+  const vehicles = await db.collection("vehicles").where("ownerUid", "==", uid).get();
+  await Promise.all(vehicles.docs.map((d) => d.ref.delete()));
+  await Promise.all([
+    bucket.deleteFiles({ prefix: `vehicle_photos/${uid}/` }),
+    bucket.deleteFiles({ prefix: `rc_cards/${uid}/` }),
+  ]);
+
+  await db.recursiveDelete(db.collection("users").doc(uid));
+  if (userRecord?.phoneNumber) {
+    await db.collection("phone_otps").doc(userRecord.phoneNumber).delete();
+  }
+
+  await auth.deleteUser(uid);
+  logger.info(`deleteAccount: removed ${uid} (${conversationIds.size} conversation(s), ${vehicles.size} vehicle(s)).`);
+  return { ok: true };
 });

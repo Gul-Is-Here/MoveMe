@@ -67,13 +67,13 @@ class _NotFound extends StatelessWidget {
             Icon(Icons.qr_code_2, size: 40, color: AppColors.faint),
             const SizedBox(height: 16),
             Text(
-              "This QR code doesn't match a ParkTag vehicle",
+              "This QR code doesn't match a MoveMe vehicle",
               textAlign: TextAlign.center,
               style: AppTextStyles.headingSm.copyWith(color: AppColors.ink, fontSize: 17),
             ),
             const SizedBox(height: 8),
             Text(
-              'The sticker may be damaged, or the vehicle was removed from ParkTag.',
+              'The sticker may be damaged, or the vehicle was removed from MoveMe.',
               textAlign: TextAlign.center,
               style: AppTextStyles.subtitle.copyWith(color: AppColors.muted, fontSize: 13.5),
             ),
@@ -381,7 +381,7 @@ class _OpenInAppBanner extends GetView<ScanContactController> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Open in the ParkTag app?',
+              'Open in the MoveMe app?',
               style: AppTextStyles.fieldValue.copyWith(
                 color: AppColors.ink,
                 fontWeight: FontWeight.w700,
@@ -432,9 +432,9 @@ class _OpenInAppBanner extends GetView<ScanContactController> {
 class _DownloadAppBanner extends GetView<ScanContactController> {
   const _DownloadAppBanner();
 
-  // TODO: replace with the real published store listings once ParkTag ships.
+  // TODO: replace with the real published store listings once MoveMe ships.
   static const _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.parktagapp.mobile';
-  static const _appStoreUrl = 'https://apps.apple.com/app/parktag/id0000000000';
+  static const _appStoreUrl = 'https://apps.apple.com/app/moveme/id0000000000';
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +462,7 @@ class _DownloadAppBanner extends GetView<ScanContactController> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Get the ParkTag app to talk directly with the owner.',
+            'Get the MoveMe app to talk directly with the owner.',
             style: AppTextStyles.subtitle.copyWith(color: AppColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 14),

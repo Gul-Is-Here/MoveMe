@@ -108,6 +108,9 @@ void main() {
     expect(find.text('Something went wrong'), findsOneWidget);
     expect(find.text('Try again'), findsOneWidget);
 
+    // Home's hero and stats push the error block below the test viewport.
+    await tester.ensureVisible(find.text('Try again'));
+    await tester.pump();
     await tester.tap(find.text('Try again'));
     await tester.pump();
 

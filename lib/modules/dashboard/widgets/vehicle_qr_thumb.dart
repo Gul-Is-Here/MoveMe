@@ -18,21 +18,27 @@ class VehicleQrThumb extends StatelessWidget {
         border: Border.all(color: AppColors.yellow, width: 2),
       ),
       child: Center(
-        child: CustomPaint(size: const Size(34, 34), painter: _QrGlyphPainter()),
+        child: CustomPaint(size: const Size(34, 34), painter: QrGlyphPainter(color: AppColors.yellow)),
       ),
     );
   }
 }
 
-class _QrGlyphPainter extends CustomPainter {
+/// Stylised QR mark (three finder squares plus a few modules), drawn in a
+/// 34x34 design grid scaled to the paint size.
+class QrGlyphPainter extends CustomPainter {
+  QrGlyphPainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final stroke = Paint()
-      ..color = AppColors.yellow
+      ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     final fill = Paint()
-      ..color = AppColors.yellow
+      ..color = color
       ..style = PaintingStyle.fill;
 
     final s = size.width / 34;
@@ -53,5 +59,5 @@ class _QrGlyphPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant QrGlyphPainter old) => old.color != color;
 }

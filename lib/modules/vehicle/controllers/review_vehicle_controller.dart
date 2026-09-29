@@ -187,7 +187,7 @@ class ReviewVehicleController extends GetxController {
       await _vehicleService.saveVehicle(
         uid: uid,
         ownerName: (ownerName == null || ownerName.isEmpty)
-            ? 'A ParkTag resident'
+            ? 'A MoveMe resident'
             : ownerName,
         nickname: plateNumber.text.trim(),
         make: make.text.trim(),

@@ -7,7 +7,9 @@ import '../../../app/services/onboarding_service.dart';
 import '../../../app/services/push_notification_service.dart';
 
 class SplashController extends GetxController {
-  static const _minDisplay = Duration(seconds: 2);
+  // The splash reveal runs ~2s; this leaves a brief beat on the settled
+  // screen before routing away.
+  static const _minDisplay = Duration(milliseconds: 2600);
 
   final _authService = Get.find<AuthService>();
   final _onboardingService = Get.find<OnboardingService>();

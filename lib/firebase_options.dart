@@ -41,44 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBX_cqFe04q6rfg8H5bBWv4XpEpwW4uN7o',
-    appId: '1:391458076633:web:0059354723ff9a08fbcbc8',
-    messagingSenderId: '391458076633',
-    projectId: 'car-ping-9d4f8',
-    authDomain: 'car-ping-9d4f8.firebaseapp.com',
-    storageBucket: 'car-ping-9d4f8.firebasestorage.app',
+    apiKey: 'AIzaSyAE7AeyAsN3mHvRhHcIJIYGY-XQ6GHOoEE',
+    appId: '1:709693784542:web:74ee7b6199475ac0209d4f',
+    messagingSenderId: '709693784542',
+    projectId: 'moveme-da262',
+    authDomain: 'moveme-da262.firebaseapp.com',
+    storageBucket: 'moveme-da262.firebasestorage.app',
+    measurementId: 'G-Z147QNJH35',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyC1euBHJwicf_4qHj8dtmLSaCZo07MvnHU',
-    appId: '1:391458076633:android:80be9faf86b18f26fbcbc8',
-    messagingSenderId: '391458076633',
-    projectId: 'car-ping-9d4f8',
-    storageBucket: 'car-ping-9d4f8.firebasestorage.app',
+    apiKey: 'AIzaSyD4RceTnj9G2Tui_hpQtr81-KzWLeDuOhI',
+    appId: '1:709693784542:android:dfaa359dd3763af9209d4f',
+    messagingSenderId: '709693784542',
+    projectId: 'moveme-da262',
+    storageBucket: 'moveme-da262.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDlIjaOZdYiVoZr9t8b5L6eBLnjIqFZS3M',
-    appId: '1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8',
-    messagingSenderId: '391458076633',
-    projectId: 'car-ping-9d4f8',
-    storageBucket: 'car-ping-9d4f8.firebasestorage.app',
+    apiKey: 'AIzaSyCdytpU0EXImOFbzN8LhLkw_mv95m4KoOM',
+    appId: '1:709693784542:ios:6190486579eb9bc9209d4f',
+    messagingSenderId: '709693784542',
+    projectId: 'moveme-da262',
+    storageBucket: 'moveme-da262.firebasestorage.app',
     iosBundleId: 'com.parktagapp.mobile',
   );
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDlIjaOZdYiVoZr9t8b5L6eBLnjIqFZS3M',
-    appId: '1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8',
-    messagingSenderId: '391458076633',
-    projectId: 'car-ping-9d4f8',
-    storageBucket: 'car-ping-9d4f8.firebasestorage.app',
+    apiKey: 'AIzaSyCdytpU0EXImOFbzN8LhLkw_mv95m4KoOM',
+    appId: '1:709693784542:ios:6190486579eb9bc9209d4f',
+    messagingSenderId: '709693784542',
+    projectId: 'moveme-da262',
+    storageBucket: 'moveme-da262.firebasestorage.app',
     iosBundleId: 'com.parktagapp.mobile',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBX_cqFe04q6rfg8H5bBWv4XpEpwW4uN7o',
-    appId: '1:391458076633:web:ad9e7dd0183e29acfbcbc8',
-    messagingSenderId: '391458076633',
-    projectId: 'car-ping-9d4f8',
-    authDomain: 'car-ping-9d4f8.firebaseapp.com',
-    storageBucket: 'car-ping-9d4f8.firebasestorage.app',
+    apiKey: 'AIzaSyAE7AeyAsN3mHvRhHcIJIYGY-XQ6GHOoEE',
+    appId: '1:709693784542:web:3c01adf42e325e4b209d4f',
+    messagingSenderId: '709693784542',
+    projectId: 'moveme-da262',
+    authDomain: 'moveme-da262.firebaseapp.com',
+    storageBucket: 'moveme-da262.firebasestorage.app',
+    measurementId: 'G-K4TJYLRHRN',
   );
 }

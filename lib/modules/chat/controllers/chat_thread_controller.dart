@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../../../app/services/conversation_service.dart';
 import '../../dashboard/models/chat_message_model.dart';
@@ -29,6 +32,12 @@ class ChatThreadController extends GetxController {
   /// "new message" pill instead.
   final isAwayFromLatest = false.obs;
   final hasUnseenIncoming = false.obs;
+
+  final _recorder = AudioRecorder();
+  final isRecording = false.obs;
+  final recordingSeconds = 0.obs;
+  Timer? _recordTimer;
+  String? _recordingPath;
 
   /// Draft text typed but not sent, kept so returning to the thread does
   /// not silently discard it.
@@ -68,9 +77,11 @@ class ChatThreadController extends GetxController {
           .map(
             (m) => ChatMessageModel(
               sender: m.sender == MessageSender.owner ? ChatSender.owner : ChatSender.scanner,
-              kind: ChatMessageKind.text,
+              kind: m.kind == MessageKind.voice ? ChatMessageKind.voice : ChatMessageKind.text,
               timeLabel: _formatTime(m.createdAt),
               text: m.text,
+              voiceDuration: m.kind == MessageKind.voice ? _formatDuration(m.durationSeconds) : '',
+              audioUrl: m.audioUrl,
               createdAt: m.createdAt,
             ),
           )
@@ -78,11 +89,19 @@ class ChatThreadController extends GetxController {
 
       // A confirmed message that matches a pending one is the same message
       // coming back off the listener — drop the optimistic copy so it
-      // isn't rendered twice.
+      // isn't rendered twice. Text messages match on their text; a voice
+      // message has none, so it matches on its (rounded) duration instead
+      // — two different recordings of the exact same length sent by the
+      // same person in the same second would be a rare false match.
       _pending.removeWhere(
         (p) =>
             p.status == ChatMessageStatus.sending &&
-            confirmed.any((c) => c.text == p.text && c.sender == p.sender),
+            confirmed.any(
+              (c) =>
+                  c.sender == p.sender &&
+                  c.kind == p.kind &&
+                  (p.kind == ChatMessageKind.voice ? c.voiceDuration == p.voiceDuration : c.text == p.text),
+            ),
       );
 
       final grew = confirmed.length > _lastConfirmedCount;
@@ -209,11 +228,129 @@ class ChatThreadController extends GetxController {
     _dispatch(message.text);
   }
 
-  // TODO(FR-05.2): wire to the `record`/`just_audio` packages for real
-  // voice-note capture and playback.
-  void recordVoiceNote() {
-    AppSnackbar.show('Coming soon', 'Voice notes are not available yet.');
+  /// Starts capturing a voice message. Requests microphone permission
+  /// through the `record` package itself, which shows the OS prompt the
+  /// first time and just checks the granted state after that.
+  Future<void> startVoiceRecording() async {
+    if (isRecording.value) return;
+    try {
+      if (!await _recorder.hasPermission()) {
+        AppSnackbar.show(
+          'Microphone access needed',
+          'Allow microphone access in your device Settings to send voice messages.',
+        );
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/voice-${DateTime.now().microsecondsSinceEpoch}.m4a';
+      await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      _recordingPath = path;
+      recordingSeconds.value = 0;
+      isRecording.value = true;
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) => recordingSeconds.value++);
+    } catch (_) {
+      isRecording.value = false;
+      AppSnackbar.show('Could not start recording', 'Please try again.');
+    }
   }
+
+  /// Discards the in-progress recording without sending it.
+  Future<void> cancelVoiceRecording() async {
+    if (!isRecording.value) return;
+    _recordTimer?.cancel();
+    isRecording.value = false;
+    try {
+      await _recorder.cancel();
+    } catch (_) {
+      // Best-effort — the temp file cleanup below still runs.
+    }
+    await _deleteLocalRecording(_recordingPath);
+    _recordingPath = null;
+  }
+
+  /// Stops recording and sends what was captured so far. A recording
+  /// shorter than one second is treated as an accidental tap and discarded
+  /// rather than sent as a near-silent clip.
+  Future<void> sendVoiceRecording() async {
+    if (!isRecording.value) return;
+    _recordTimer?.cancel();
+    final durationSeconds = recordingSeconds.value;
+    isRecording.value = false;
+
+    String? path;
+    try {
+      path = await _recorder.stop();
+    } catch (_) {
+      path = _recordingPath;
+    }
+    _recordingPath = null;
+
+    if (path == null || durationSeconds < 1) {
+      await _deleteLocalRecording(path);
+      return;
+    }
+    _dispatchVoice(path, durationSeconds);
+  }
+
+  void _dispatchVoice(String localPath, int durationSeconds) {
+    final optimistic = ChatMessageModel(
+      sender: thread.viewerRole == ThreadViewerRole.owner ? ChatSender.owner : ChatSender.scanner,
+      kind: ChatMessageKind.voice,
+      timeLabel: _formatTime(DateTime.now()),
+      voiceDuration: _formatDuration(durationSeconds),
+      status: ChatMessageStatus.sending,
+      createdAt: DateTime.now(),
+      localId: '${DateTime.now().microsecondsSinceEpoch}',
+    );
+    _pending.add(optimistic);
+    _rebuild(_confirmed);
+    _scrollToLatest();
+
+    final write = thread.viewerRole == ThreadViewerRole.owner
+        ? _conversationService.sendOwnerVoiceMessage(
+            conversationId: thread.conversationId,
+            localFilePath: localPath,
+            durationSeconds: durationSeconds,
+          )
+        : _conversationService.sendAuthenticatedScannerVoiceMessage(
+            conversationId: thread.conversationId,
+            localFilePath: localPath,
+            durationSeconds: durationSeconds,
+          );
+
+    write
+        .then((_) => _deleteLocalRecording(localPath))
+        .catchError((_) {
+          final i = _pending.indexWhere((m) => m.localId == optimistic.localId);
+          if (i != -1) {
+            _pending[i] = _pending[i].copyWith(status: ChatMessageStatus.failed);
+            _rebuild(_confirmed);
+          }
+        });
+  }
+
+  static Future<void> _deleteLocalRecording(String? path) async {
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Leftover temp files are harmless — never let cleanup surface an error.
+    }
+  }
+
+  static String _formatDuration(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  // ---------------------------------------------------------------------
+  // Disabled for this module (see chat_thread_view.dart's _InputBar and
+  // _Header) — kept implemented, not deleted, so document/media sending
+  // and in-app calls can be re-enabled by uncommenting their UI entry
+  // points. Do not remove.
+  // ---------------------------------------------------------------------
 
   // TODO(FR-05.3): wire to image_picker + Firebase Storage upload.
   void attachMedia() {
@@ -257,6 +394,12 @@ class ChatThreadController extends GetxController {
     scrollController.removeListener(_onScroll);
     scrollController.dispose();
     textController.dispose();
+    // Navigating away mid-recording must not leave the mic open or an
+    // orphaned temp file behind.
+    _recordTimer?.cancel();
+    if (isRecording.value) _recorder.cancel();
+    _deleteLocalRecording(_recordingPath);
+    _recorder.dispose();
     super.onClose();
   }
 }

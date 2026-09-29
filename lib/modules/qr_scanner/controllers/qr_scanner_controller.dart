@@ -9,7 +9,7 @@ import '../../../app/utils/vehicle_color.dart';
 import '../../dashboard/models/message_thread_model.dart';
 import '../../../app/utils/app_logger.dart';
 
-/// Lets a signed-in resident scan another car's ParkTag QR sticker right
+/// Lets a signed-in resident scan another car's MoveMe QR sticker right
 /// from inside the app — no manual capture button, continuous autofocus,
 /// automatic detection, matching the feel of Android's built-in QR
 /// scanner. On a valid match, the vehicle/owner identity and the chat
@@ -78,16 +78,16 @@ class QrScannerController extends GetxController {
     }
 
     if (vehicleId == null) {
-      // Every barcode in this frame was QR but not a ParkTag link (e.g. a
+      // Every barcode in this frame was QR but not a MoveMe link (e.g. a
       // random QR code) — surface it briefly and keep scanning; detection
       // was never paused for this branch, so it's already resuming.
       if (capture.barcodes.isNotEmpty) {
-        _flashError("That's not a ParkTag code");
+        _flashError("That's not a MoveMe code");
       }
       return;
     }
 
-    // Found a valid ParkTag code — lock out further detections and pause
+    // Found a valid MoveMe code — lock out further detections and pause
     // the camera while the backend resolves vehicle/owner and creates or
     // fetches the chat room (see resolveVehicleAndOpenChat).
     _handled = true;
