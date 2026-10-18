@@ -34,4 +34,13 @@ class FakePushNotificationService implements PushNotificationService {
     pendingThread = null;
     return thread;
   }
+
+  PendingOrderOpen? pendingOrder;
+
+  @override
+  PendingOrderOpen? consumePendingOrder() {
+    final order = pendingOrder;
+    pendingOrder = null;
+    return order;
+  }
 }

@@ -28,9 +28,9 @@ class SignUpController extends GetxController {
     final e164Phone = '+92${phone.text.trim()}';
     isSubmitting.value = true;
 
-    final bool alreadyRegistered;
+    final PhoneLookup lookup;
     try {
-      alreadyRegistered = await _authService.phoneIsRegistered(e164Phone);
+      lookup = await _authService.lookupPhone(e164Phone);
     } catch (e, stack) {
       AppLogger.error('SignUp', e, stack);
       isSubmitting.value = false;
@@ -40,7 +40,12 @@ class SignUpController extends GetxController {
       );
       return;
     }
-    if (alreadyRegistered) {
+    if (lookup.isAdmin) {
+      isSubmitting.value = false;
+      AppSnackbar.show('This is the admin number', 'The admin signs in from Log in, not Sign up.');
+      return;
+    }
+    if (lookup.registered) {
       isSubmitting.value = false;
       AppSnackbar.show('Account already exists', 'This number is already registered — please log in instead.');
       return;

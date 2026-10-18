@@ -53,6 +53,26 @@ abstract class PushNotificationService {
   /// navigate anywhere, so `SplashController` picks it up once routing is
   /// ready and consumes it (returns null every time after the first read).
   MessageThreadModel? consumePendingChatThread();
+
+  /// An order notification tapped while the app was closed, picked up by
+  /// Splash once routing is ready.
+  PendingOrderOpen? consumePendingOrder();
+}
+
+/// Which order a tapped notification is about, and whose side opens it.
+class PendingOrderOpen {
+  const PendingOrderOpen({required this.number, required this.forAdmin});
+
+  final String number;
+  final bool forAdmin;
+
+  String get route => forAdmin ? AppRoutes.adminOrder : AppRoutes.orderDetails;
+
+  static PendingOrderOpen? fromData(Map<String, dynamic> data) {
+    final number = data['orderId'] as String?;
+    if (data['type'] != 'order' || number == null || number.isEmpty) return null;
+    return PendingOrderOpen(number: number, forAdmin: data['audience'] == 'admin');
+  }
 }
 
 class FirebasePushNotificationService implements PushNotificationService {
@@ -61,6 +81,7 @@ class FirebasePushNotificationService implements PushNotificationService {
 
   String? _currentToken;
   MessageThreadModel? _pendingThread;
+  PendingOrderOpen? _pendingOrder;
 
   @override
   Future<void> init() async {
@@ -104,6 +125,7 @@ class FirebasePushNotificationService implements PushNotificationService {
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
       _pendingThread = _threadFromMessage(initialMessage);
+      _pendingOrder = PendingOrderOpen.fromData(initialMessage.data);
     }
   }
 
@@ -146,7 +168,24 @@ class FirebasePushNotificationService implements PushNotificationService {
     return thread;
   }
 
+  @override
+  PendingOrderOpen? consumePendingOrder() {
+    final order = _pendingOrder;
+    _pendingOrder = null;
+    return order;
+  }
+
   void _showForegroundBanner(RemoteMessage message) {
+    final order = PendingOrderOpen.fromData(message.data);
+    if (order != null) {
+      AppSnackbar.show(
+        message.notification?.title ?? 'Order update',
+        message.notification?.body ?? '',
+        position: SnackPosition.TOP,
+        onTap: (_) => Get.toNamed(order.route, arguments: order.number),
+      );
+      return;
+    }
     final thread = _threadFromMessage(message);
     if (thread == null) return;
     // Colours come from AppSnackbar now — every snackbar in the app is
@@ -165,6 +204,11 @@ class FirebasePushNotificationService implements PushNotificationService {
   }
 
   void _handleMessageNavigation(RemoteMessage message) {
+    final order = PendingOrderOpen.fromData(message.data);
+    if (order != null) {
+      Get.toNamed(order.route, arguments: order.number);
+      return;
+    }
     final thread = _threadFromMessage(message);
     if (thread == null) return;
     Get.toNamed(AppRoutes.chatThread, arguments: thread);

@@ -26,7 +26,7 @@ class FakeDeepLinkService implements DeepLinkService {
 
   @override
   String scanLinkFor({required String vehicleId, required String scannerId}) {
-    return 'https://car-ping-9d4f8.web.app/scan/$vehicleId?scannerId=$scannerId';
+    return 'https://moveme-da262.web.app/scan/$vehicleId?scannerId=$scannerId';
   }
 
   @override

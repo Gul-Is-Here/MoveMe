@@ -256,7 +256,7 @@ void main() {
     await tester.pump();
 
     for (final text in ['Hello', 'Are you there', 'Please move']) {
-      await fakeConversations.sendScannerMessage(
+      await fakeConversations.simulateScannerMessage(
         vehicleId: 'v7',
         scannerId: 's7',
         ownerUid: 'resident-1',

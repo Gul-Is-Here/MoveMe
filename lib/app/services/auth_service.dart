@@ -20,10 +20,20 @@ abstract class AuthService {
   /// Firebase Auth uid.
   Future<String> confirmOtp({required String verificationId, required String smsCode});
 
-  /// Whether a resident already exists for this phone number — used to
-  /// route sign-up vs. login: FR-01 expects residents to register once and
-  /// log back in afterwards, not re-register every time.
-  Future<bool> phoneIsRegistered(String e164Phone);
+  /// Whether a resident already exists for this phone number, and whether
+  /// it is the admin's number — routes sign-up vs. login vs. the admin side.
+  Future<PhoneLookup> lookupPhone(String e164Phone);
+
+  /// Makes the signed-in ADMIN_PHONE account the admin. Throws for any
+  /// other number.
+  Future<void> claimAdminRole();
+
+  /// Whether the signed-in account is the admin.
+  Future<bool> isAdmin();
+
+  /// Fires when Firebase signs this device out on its own — the account was
+  /// blocked (or deleted) elsewhere — but not for a [signOut] call.
+  Stream<void> get forcedSignOuts;
 
   /// Creates the resident's Firestore profile after their first successful
   /// sign-up verification. [cnic] is optional — Sign Up may not always
@@ -75,6 +85,16 @@ abstract class AuthService {
   Future<void> signOut();
 }
 
+class PhoneLookup {
+  const PhoneLookup({required this.registered, required this.isAdmin, this.blocked = false});
+
+  final bool registered;
+  final bool isAdmin;
+
+  /// Blocked by the admin: the number can't sign in.
+  final bool blocked;
+}
+
 /// Turns a [FirebaseAuthException] into something a resident (or a developer
 /// reading a snackbar) can act on. Firebase's own copy is actively misleading
 /// for the region case: a blocked SMS region reports `operation-not-allowed`
@@ -105,6 +125,8 @@ String describeAuthFailure(FirebaseAuthException e) {
           'blocked it. Wait a while, or use a Firebase test phone number.';
     case 'quota-exceeded':
       return "This project's SMS quota is used up. Try again later.";
+    case 'user-disabled':
+      return 'This account has been blocked. Contact MoveMe if you think this is a mistake.';
     case 'app-not-authorized':
       return "This app build isn't authorized for phone sign-in. Check the "
           "SHA-1/SHA-256 fingerprints registered in the Firebase console.";
@@ -133,6 +155,20 @@ String describeAuthFailure(FirebaseAuthException e) {
 class FirebaseAuthService implements AuthService {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
+
+  bool _signingOut = false;
+  late final Stream<void> _forcedSignOuts = () {
+    String? previousUid = _auth.currentUser?.uid;
+    return _auth.idTokenChanges().where((user) {
+      final forced = previousUid != null && user == null && !_signingOut;
+      previousUid = user?.uid;
+      if (user == null) _signingOut = false;
+      return forced;
+    }).map((_) {});
+  }();
+
+  @override
+  Stream<void> get forcedSignOuts => _forcedSignOuts;
 
   /// Android's resend token per number, from the last `codeSent`. Without
   /// passing it back as `forceResendingToken`, a repeat request for the
@@ -211,19 +247,43 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<bool> phoneIsRegistered(String e164Phone) async {
+  Future<PhoneLookup> lookupPhone(String e164Phone) async {
     final watch = Stopwatch()..start();
     try {
-      final snapshot = await _firestore
-          .collection('users')
-          .where('phone', isEqualTo: e164Phone)
-          .limit(1)
-          .get()
+      // Server-side, because users/{uid} is readable only by its owner.
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('lookupPhone')
+          .call({'phone': e164Phone})
           .timeout(const Duration(seconds: 15));
-      AppLogger.debug('PhoneAuth', 'phoneIsRegistered lookup took ${watch.elapsedMilliseconds}ms');
-      return snapshot.docs.isNotEmpty;
+      AppLogger.debug('PhoneAuth', 'lookupPhone took ${watch.elapsedMilliseconds}ms');
+      final data = result.data as Map;
+      return PhoneLookup(
+        registered: data['registered'] == true,
+        isAdmin: data['isAdmin'] == true,
+        blocked: data['blocked'] == true,
+      );
     } catch (e) {
-      AppLogger.debug('PhoneAuth', 'phoneIsRegistered failed after ${watch.elapsedMilliseconds}ms: $e');
+      AppLogger.debug('PhoneAuth', 'lookupPhone failed after ${watch.elapsedMilliseconds}ms: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> claimAdminRole() async {
+    await FirebaseFunctions.instance.httpsCallable('claimAdminRole').call();
+  }
+
+  @override
+  Future<bool> isAdmin() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+    try {
+      final config = await _firestore.collection('config').doc('admin').get();
+      return config.data()?['uid'] == uid;
+    } on FirebaseException catch (e) {
+      // config/admin is readable only by the admin, so everyone else is
+      // refused rather than shown a different uid.
+      if (e.code == 'permission-denied') return false;
       rethrow;
     }
   }
@@ -293,7 +353,10 @@ class FirebaseAuthService implements AuthService {
   String? get currentPhone => _auth.currentUser?.phoneNumber;
 
   @override
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() {
+    _signingOut = true;
+    return _auth.signOut();
+  }
 }
 
 /// Phone OTP through our own Cloud Functions + local SMS gateway instead of

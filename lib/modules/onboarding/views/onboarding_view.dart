@@ -14,7 +14,7 @@ class OnboardingView extends GetView<OnboardingController> {
   static final _pages = [
     OnboardingPageData(
       headline: 'Put a tag on\nyour car',
-      body: "Register your vehicle and get a free MoveMe QR sticker. Stick it on your windshield — it's all anyone needs to reach you.",
+      body: "Register your vehicle and order your MoveMe QR sticker. Stick it on your windshield — it's all anyone needs to reach you.",
       illustrationBuilder: (_) => const TagCarIllustration(),
     ),
     OnboardingPageData(

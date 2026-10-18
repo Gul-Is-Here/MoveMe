@@ -24,7 +24,7 @@ class OtpController extends GetxController {
   });
 
   final String phone;
-  final String mode; // 'signUp' or 'login'
+  final String mode; // 'signUp', 'login' or 'admin'
   final String? name;
   final String? cnic;
 
@@ -101,6 +101,13 @@ class OtpController extends GetxController {
     isVerifying.value = true;
     try {
       final uid = await _authService.confirmOtp(verificationId: verificationId, smsCode: _enteredCode);
+      if (mode == 'admin') {
+        await _authService.claimAdminRole();
+        await _pushService.syncToken();
+        isVerifying.value = false;
+        Get.offAllNamed(AppRoutes.admin);
+        return;
+      }
       if (mode == 'signUp') {
         await _authService.createResidentProfile(uid: uid, name: name ?? '', phone: '+92$phone', cnic: cnic);
       }

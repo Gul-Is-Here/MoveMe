@@ -8,12 +8,15 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:get/get.dart';
 
 import 'app/app.dart';
+import 'app/services/admin_service.dart';
 import 'app/services/auth_service.dart';
 import 'app/services/conversation_service.dart';
 import 'app/services/deep_link_service.dart';
 import 'app/services/onboarding_service.dart';
+import 'app/services/order_service.dart';
 import 'app/services/push_notification_service.dart';
 import 'app/services/rc_ocr_service.dart';
+import 'app/services/session_watcher.dart';
 import 'app/services/vehicle_service.dart';
 import 'app/theme/theme_controller.dart';
 import 'firebase_options.dart';
@@ -26,13 +29,11 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await FirebaseAppCheck.instance.activate(
-    androidProvider: kDebugMode
-        ? AndroidProvider.debug
-        : AndroidProvider.playIntegrity,
-    appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
-    // Score-based reCAPTCHA Enterprise key, scoped to car-ping-9d4f8.web.app
-    // and car-ping-9d4f8.firebaseapp.com (gcloud recaptcha keys create).
-    webProvider: ReCaptchaEnterpriseProvider('6LfAFM8tAAAAAEQxVDcuReqjALuzxSxFaUbdI0Y3'),
+    providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
+    providerApple: kDebugMode ? const AppleDebugProvider() : const AppleAppAttestProvider(),
+    // Score-based reCAPTCHA Enterprise key, scoped to moveme-da262.web.app
+    // and moveme-da262.firebaseapp.com (gcloud recaptcha keys create).
+    providerWeb: ReCaptchaEnterpriseProvider('6LfuE9YtAAAAAGWxLdUwkhiXK0at9Il78idiNALn'),
   );
 
   // Must be registered before runApp so FCM can hand it background/
@@ -71,6 +72,8 @@ void main() async {
   Get.put<VehicleService>(FirebaseVehicleService(), permanent: true);
   Get.put<ConversationService>(FirebaseConversationService(), permanent: true);
   Get.put<RcOcrService>(OpenAiRcOcrService(), permanent: true);
+  Get.put<OrderService>(FirebaseOrderService(), permanent: true);
+  Get.put<AdminService>(FirebaseAdminService(), permanent: true);
   final pushService = Get.put<PushNotificationService>(
     FirebasePushNotificationService(),
     permanent: true,
@@ -81,5 +84,6 @@ void main() async {
     permanent: true,
   );
   await deepLinkService.init();
+  watchForcedSignOuts(Get.find<AuthService>());
   runApp(const MyApp());
 }

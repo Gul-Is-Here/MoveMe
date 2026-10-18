@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/services/auth_service.dart';
+import '../../../app/services/screen_security.dart';
 import '../../../app/services/vehicle_service.dart';
 import '../../dashboard/controllers/home_tab_controller.dart';
 import '../../dashboard/models/vehicle_model.dart';
@@ -30,6 +31,22 @@ class VehicleDetailsController extends GetxController {
   final qrBoundaryKey = GlobalKey();
 
   final isSharing = false.obs;
+
+  // The QR code is on screen here and on the screens opened from it.
+  @override
+  void onInit() {
+    super.onInit();
+    ScreenSecurity.enable();
+  }
+
+  @override
+  void onClose() {
+    ScreenSecurity.disable();
+    super.onClose();
+  }
+
+  /// Opens the sticker order with this vehicle set to 1 sticker.
+  void orderStickers() => Get.toNamed(AppRoutes.orderStickers, arguments: vehicle.id);
 
   /// Pushes Edit and waits for it to pop back with the edited vehicle
   /// (rather than pushing a fresh Vehicle Details route on save, which

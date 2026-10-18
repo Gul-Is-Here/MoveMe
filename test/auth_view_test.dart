@@ -149,7 +149,7 @@ void main() {
     );
 
     expect(fakeAuth.registeredPhones, contains('+923001234567'));
-    expect(await fakeAuth.phoneIsRegistered('+923001234567'), isTrue);
+    expect((await fakeAuth.lookupPhone('+923001234567')).registered, isTrue);
     expect(fakeAuth.profiles[uid]?['cnic'], '42101-1234567-1');
 
     // The signup flow above navigated to the (stub) OTP route, which shows
@@ -158,15 +158,16 @@ void main() {
   });
 }
 
-/// Wraps [FakeAuthService] but holds `phoneIsRegistered` open until
-/// [gate] resolves, giving a test a real window to observe the loading
-/// state in — the plain fake resolves too fast (no real async gap) for a
-/// bare pump() to ever catch the button mid-request.
+/// Wraps [FakeAuthService] but holds `lookupPhone` open until [gate]
+/// resolves, giving a test a real window to observe the loading state in —
+/// the plain fake resolves too fast (no real async gap) for a bare pump()
+/// to ever catch the button mid-request.
 class _GatedAuthService extends FakeAuthService {
   _GatedAuthService(this.gate);
 
   final Future<bool> gate;
 
   @override
-  Future<bool> phoneIsRegistered(String e164Phone) => gate;
+  Future<PhoneLookup> lookupPhone(String e164Phone) async =>
+      PhoneLookup(registered: await gate, isAdmin: false);
 }

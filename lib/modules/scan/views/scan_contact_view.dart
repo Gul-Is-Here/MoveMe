@@ -7,6 +7,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../chat/widgets/resolved_banner.dart';
 import '../controllers/scan_contact_controller.dart';
+import '../widgets/scan_attachments.dart';
 
 /// FR-04: the public page a vehicle's QR sticker opens. No sign-in — anyone
 /// who scans the sticker lands here, sees the vehicle + owner, can message
@@ -246,13 +247,16 @@ class _MessageThread extends GetView<ScanContactController> {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          message.text,
-                          style: AppTextStyles.fieldValue.copyWith(
-                            color: message.sender == MessageSender.owner ? AppColors.ink : AppColors.background,
-                            fontSize: 13.5,
+                        if (message.kind != MessageKind.text)
+                          ScanMessageMedia(message: message, onDark: message.sender != MessageSender.owner)
+                        else
+                          Text(
+                            message.text,
+                            style: AppTextStyles.fieldValue.copyWith(
+                              color: message.sender == MessageSender.owner ? AppColors.ink : AppColors.background,
+                              fontSize: 13.5,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -312,6 +316,8 @@ class _MessageComposer extends GetView<ScanContactController> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
+          const SizedBox(height: 10),
+          const ScanAttachmentBar(),
           const SizedBox(height: 12),
           Obx(
             () => SizedBox(
@@ -333,7 +339,10 @@ class _MessageComposer extends GetView<ScanContactController> {
                       else
                         Icon(Icons.send_outlined, size: 16, color: AppColors.background),
                       const SizedBox(width: 8),
-                      Text('Send message', style: AppTextStyles.buttonLabel.copyWith(color: AppColors.background, fontSize: 14)),
+                      Text(
+                        controller.sendingLabel.value ?? 'Send message',
+                        style: AppTextStyles.buttonLabel.copyWith(color: AppColors.background, fontSize: 14),
+                      ),
                     ],
                   ),
                 ),
@@ -432,8 +441,7 @@ class _OpenInAppBanner extends GetView<ScanContactController> {
 class _DownloadAppBanner extends GetView<ScanContactController> {
   const _DownloadAppBanner();
 
-  // TODO: replace with the real published store listings once MoveMe ships.
-  static const _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.parktagapp.mobile';
+  // TODO: replace with the real App Store listing once MoveMe ships on iOS.
   static const _appStoreUrl = 'https://apps.apple.com/app/moveme/id0000000000';
 
   @override
@@ -476,7 +484,7 @@ class _DownloadAppBanner extends GetView<ScanContactController> {
             children: const [
               Expanded(child: _StoreButton(label: 'App Store', url: _appStoreUrl)),
               SizedBox(width: 10),
-              Expanded(child: _StoreButton(label: 'Google Play', url: _playStoreUrl)),
+              Expanded(child: _StoreButton(label: 'Google Play', url: playStoreUrl)),
             ],
           ),
         ],

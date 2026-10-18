@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -9,7 +10,22 @@ enum MessageSender { owner, scanner }
 /// Mirrors [ChatMessageKind] at the service layer — kept separate so this
 /// file never has to import a UI model. A message document with no `kind`
 /// field (every one written before voice messages existed) reads as text.
-enum MessageKind { text, voice }
+enum MessageKind { text, voice, image, video }
+
+MessageKind _kindFrom(Object? value) => switch (value) {
+      'voice' => MessageKind.voice,
+      'image' => MessageKind.image,
+      'video' => MessageKind.video,
+      _ => MessageKind.text,
+    };
+
+/// What the conversation list shows for a message with no text.
+String previewFor(MessageKind kind, String text) => switch (kind) {
+      MessageKind.voice => '🎤 Voice message',
+      MessageKind.image => '📷 Photo',
+      MessageKind.video => '🎥 Video',
+      MessageKind.text => text,
+    };
 
 /// A vehicle's QR sticker is scanned by many different people — each one
 /// must get their own private thread with the owner, not walk into a
@@ -118,6 +134,7 @@ class ConversationMessage {
     required this.createdAt,
     this.kind = MessageKind.text,
     this.audioUrl,
+    this.mediaUrl,
     this.durationSeconds = 0,
   });
 
@@ -130,9 +147,38 @@ class ConversationMessage {
   /// [MessageKind.voice].
   final String? audioUrl;
 
+  /// Download URL of a photo or video message.
+  final String? mediaUrl;
+
   /// Recording length, rounded to whole seconds — only meaningful when
   /// [kind] is [MessageKind.voice].
   final int durationSeconds;
+}
+
+/// Where a scan-page visitor was, if they chose to share it.
+class ScanLocation {
+  const ScanLocation({required this.lat, required this.lng, this.accuracy});
+
+  final double lat;
+  final double lng;
+  final double? accuracy;
+
+  Map<String, dynamic> toMap() => {'lat': lat, 'lng': lng, 'accuracy': ?accuracy};
+}
+
+/// A photo, video or voice note a web scanner has already uploaded, ready
+/// to attach to [ConversationService.postScannerMessage].
+class ScannerAttachment {
+  const ScannerAttachment({required this.kind, required this.storagePath, this.durationSeconds = 0});
+
+  final MessageKind kind;
+
+  /// Must sit inside this conversation's own Storage folder — the server
+  /// rejects anything else.
+  final String storagePath;
+  final int durationSeconds;
+
+  Map<String, dynamic> toMap() => {'kind': kind.name, 'path': storagePath, 'durationSeconds': durationSeconds};
 }
 
 /// Wraps the Firestore `conversations` collection — the messaging thread a
@@ -178,20 +224,34 @@ abstract class ConversationService {
     String? anonymousScannerId,
   });
 
-  /// Called from the public Scan Contact Page. Creates this scanner's
-  /// conversation on first contact (or reopens a resolved one) and appends
-  /// their message. [scannerId] identifies this browser/device (persisted
-  /// locally by the scan page) — a different scanner gets a different
-  /// conversation even for the same vehicle.
-  Future<void> sendScannerMessage({
+  /// Uploads one of a web scanner's attachments into their conversation's
+  /// Storage folder and returns its path for [postScannerMessage].
+  Future<String> uploadScannerAttachment({
     required String vehicleId,
     required String scannerId,
-    required String ownerUid,
-    required String plateNumber,
-    required String colorName,
+    required MessageKind kind,
+    required List<int> bytes,
+    required String contentType,
+    void Function(double progress)? onProgress,
+  });
+
+  /// Called from the public Scan Contact Page, through the
+  /// postScannerMessage Cloud Function — the only way that page can send.
+  /// The server looks the owner up itself, creates this scanner's
+  /// conversation on first contact, and appends the text and any
+  /// [attachments]. [scannerId] identifies this browser (persisted by the
+  /// scan page), so a different scanner gets a different conversation.
+  Future<void> postScannerMessage({
+    required String vehicleId,
+    required String scannerId,
     required String scannerName,
     required String text,
+    List<ScannerAttachment> attachments,
+    ScanLocation? location,
   });
+
+  /// Records a scan-page visit in the server's safety log.
+  Future<void> logScanVisit({required String vehicleId, required String scannerId, ScanLocation? location});
 
   /// Called from the resident's Chat screen when they're the vehicle's
   /// owner — just appends a reply.
@@ -218,6 +278,17 @@ abstract class ConversationService {
     required String conversationId,
     required String localFilePath,
     required int durationSeconds,
+  });
+
+  /// Uploads a camera photo or video ([kind] is image or video) and appends
+  /// it as a message from the owner ([asOwner]) or the signed-in scanner.
+  /// Returns its download URL.
+  Future<String> sendMediaMessage({
+    required String conversationId,
+    required bool asOwner,
+    required MessageKind kind,
+    required String localFilePath,
+    void Function(double progress)? onProgress,
   });
 
   /// Either side can toggle this — the scanner from the web page (FR-07.2),
@@ -303,8 +374,9 @@ class FirebaseConversationService implements ConversationService {
           sender: data['sender'] == 'owner' ? MessageSender.owner : MessageSender.scanner,
           text: data['text'] as String? ?? '',
           createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-          kind: data['kind'] == 'voice' ? MessageKind.voice : MessageKind.text,
+          kind: _kindFrom(data['kind']),
           audioUrl: data['audioUrl'] as String?,
+          mediaUrl: data['mediaUrl'] as String?,
           durationSeconds: data['durationSeconds'] as int? ?? 0,
         );
       }).toList(),
@@ -312,35 +384,61 @@ class FirebaseConversationService implements ConversationService {
   }
 
   @override
-  Future<void> sendScannerMessage({
+  Future<String> uploadScannerAttachment({
     required String vehicleId,
     required String scannerId,
-    required String ownerUid,
-    required String plateNumber,
-    required String colorName,
+    required MessageKind kind,
+    required List<int> bytes,
+    required String contentType,
+    void Function(double progress)? onProgress,
+  }) async {
+    final conversationId = conversationIdFor(vehicleId, scannerId);
+    final ext = switch (kind) {
+      MessageKind.voice => contentType.contains('webm') ? 'webm' : 'm4a',
+      MessageKind.video => contentType.contains('quicktime') ? 'mov' : 'mp4',
+      _ => 'jpg',
+    };
+    final path = 'conversations/$conversationId/scanner/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    final upload = FirebaseStorage.instance.ref(path).putData(
+          Uint8List.fromList(bytes),
+          SettableMetadata(contentType: contentType),
+        );
+    final sub = upload.snapshotEvents.listen((snap) {
+      if (snap.totalBytes > 0) onProgress?.call(snap.bytesTransferred / snap.totalBytes);
+    });
+    try {
+      await upload;
+    } finally {
+      await sub.cancel();
+    }
+    return path;
+  }
+
+  @override
+  Future<void> postScannerMessage({
+    required String vehicleId,
+    required String scannerId,
     required String scannerName,
     required String text,
+    List<ScannerAttachment> attachments = const [],
+    ScanLocation? location,
   }) async {
-    final docRef = _conversations.doc(conversationIdFor(vehicleId, scannerId));
-    await docRef.set({
+    await FirebaseFunctions.instance.httpsCallable('postScannerMessage').call({
       'vehicleId': vehicleId,
       'scannerId': scannerId,
-      'ownerUid': ownerUid,
-      'plateNumber': plateNumber,
-      'colorName': colorName,
-      'scannerName': scannerName.isEmpty ? 'Anonymous' : scannerName,
-      'lastMessagePreview': text,
-      'lastMessageAt': FieldValue.serverTimestamp(),
-      'unreadForOwner': true,
-      'unreadForScanner': false,
-      'unreadCountForOwner': FieldValue.increment(1),
-      'unreadCountForScanner': 0,
-      'resolved': false,
-    }, SetOptions(merge: true));
-    await docRef.collection('messages').add({
-      'sender': 'scanner',
+      'scannerName': scannerName,
       'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
+      'attachments': attachments.map((a) => a.toMap()).toList(),
+      'location': ?location?.toMap(),
+    });
+  }
+
+  @override
+  Future<void> logScanVisit({required String vehicleId, required String scannerId, ScanLocation? location}) async {
+    await FirebaseFunctions.instance.httpsCallable('logActivity').call({
+      'vehicleId': vehicleId,
+      'scannerId': scannerId,
+      'location': ?location?.toMap(),
     });
   }
 
@@ -380,36 +478,79 @@ class FirebaseConversationService implements ConversationService {
     });
   }
 
-  /// Shared by [sendOwnerVoiceMessage] and
-  /// [sendAuthenticatedScannerVoiceMessage] — everything except the
-  /// `sender` value and which unread counters flip is identical.
-  Future<void> _sendVoiceMessage({
+  static const _ownerSentPatch = {
+    'unreadForOwner': false,
+    'unreadForScanner': true,
+    'unreadCountForOwner': 0,
+  };
+  static const _scannerSentPatch = {
+    'unreadForOwner': true,
+    'unreadForScanner': false,
+    'unreadCountForScanner': 0,
+  };
+
+  /// Uploads a voice note, photo or video into the conversation's own
+  /// Storage folder and appends it as a message. Returns its download URL.
+  Future<String> _sendFileMessage({
     required String conversationId,
+    required bool asOwner,
+    required MessageKind kind,
     required String localFilePath,
-    required int durationSeconds,
-    required String sender,
-    required Map<String, dynamic> conversationPatch,
+    int durationSeconds = 0,
+    void Function(double progress)? onProgress,
   }) async {
+    final (folder, ext, contentType) = switch (kind) {
+      MessageKind.voice => ('voice', 'm4a', 'audio/mp4'),
+      MessageKind.video => ('video', 'mp4', 'video/mp4'),
+      _ => ('image', 'jpg', 'image/jpeg'),
+    };
     final ref = FirebaseStorage.instance.ref(
-      'conversations/$conversationId/voice/${DateTime.now().microsecondsSinceEpoch}.m4a',
+      'conversations/$conversationId/$folder/${DateTime.now().microsecondsSinceEpoch}.$ext',
     );
-    await ref.putFile(File(localFilePath));
-    final audioUrl = await ref.getDownloadURL();
+    final upload = ref.putFile(File(localFilePath), SettableMetadata(contentType: contentType));
+    final sub = upload.snapshotEvents.listen((snap) {
+      if (snap.totalBytes > 0) onProgress?.call(snap.bytesTransferred / snap.totalBytes);
+    });
+    try {
+      await upload;
+    } finally {
+      await sub.cancel();
+    }
+    final url = await ref.getDownloadURL();
 
     final docRef = _conversations.doc(conversationId);
     await docRef.set({
-      'lastMessagePreview': '🎤 Voice message',
+      'lastMessagePreview': previewFor(kind, ''),
       'lastMessageAt': FieldValue.serverTimestamp(),
-      ...conversationPatch,
+      ...(asOwner ? _ownerSentPatch : _scannerSentPatch),
+      asOwner ? 'unreadCountForScanner' : 'unreadCountForOwner': FieldValue.increment(1),
     }, SetOptions(merge: true));
     await docRef.collection('messages').add({
-      'sender': sender,
-      'kind': 'voice',
-      'audioUrl': audioUrl,
-      'durationSeconds': durationSeconds,
+      'sender': asOwner ? 'owner' : 'scanner',
+      'kind': kind.name,
+      if (kind == MessageKind.voice) 'audioUrl': url else 'mediaUrl': url,
+      if (kind == MessageKind.voice) 'durationSeconds': durationSeconds,
       'text': '',
       'createdAt': FieldValue.serverTimestamp(),
     });
+    return url;
+  }
+
+  @override
+  Future<String> sendMediaMessage({
+    required String conversationId,
+    required bool asOwner,
+    required MessageKind kind,
+    required String localFilePath,
+    void Function(double progress)? onProgress,
+  }) {
+    return _sendFileMessage(
+      conversationId: conversationId,
+      asOwner: asOwner,
+      kind: kind,
+      localFilePath: localFilePath,
+      onProgress: onProgress,
+    );
   }
 
   @override
@@ -417,18 +558,13 @@ class FirebaseConversationService implements ConversationService {
     required String conversationId,
     required String localFilePath,
     required int durationSeconds,
-  }) {
-    return _sendVoiceMessage(
+  }) async {
+    await _sendFileMessage(
       conversationId: conversationId,
+      asOwner: true,
+      kind: MessageKind.voice,
       localFilePath: localFilePath,
       durationSeconds: durationSeconds,
-      sender: 'owner',
-      conversationPatch: {
-        'unreadForOwner': false,
-        'unreadForScanner': true,
-        'unreadCountForOwner': 0,
-        'unreadCountForScanner': FieldValue.increment(1),
-      },
     );
   }
 
@@ -437,18 +573,13 @@ class FirebaseConversationService implements ConversationService {
     required String conversationId,
     required String localFilePath,
     required int durationSeconds,
-  }) {
-    return _sendVoiceMessage(
+  }) async {
+    await _sendFileMessage(
       conversationId: conversationId,
+      asOwner: false,
+      kind: MessageKind.voice,
       localFilePath: localFilePath,
       durationSeconds: durationSeconds,
-      sender: 'scanner',
-      conversationPatch: {
-        'unreadForOwner': true,
-        'unreadForScanner': false,
-        'unreadCountForOwner': FieldValue.increment(1),
-        'unreadCountForScanner': 0,
-      },
     );
   }
 

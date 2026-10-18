@@ -29,6 +29,25 @@ abstract class VehicleService {
     String? rcCardBackImagePath,
   });
 
+  /// Saves an edit to both the private and the public vehicle documents.
+  /// [photos] mixes already-uploaded download URLs (kept as they are) and
+  /// local file paths (uploaded now); photos dropped from the list are
+  /// deleted from Storage. Returns the final photo URLs, in order.
+  Future<List<String>> updateVehicle({
+    required String uid,
+    required String vehicleId,
+    required String nickname,
+    required String make,
+    required String model,
+    required String plateNumber,
+    required String colorName,
+    required String dateOfRegistration,
+    required String engineNumber,
+    required String chassisNumber,
+    required String address,
+    required List<String> photos,
+  });
+
   /// Deletes the vehicle document (both the private `users/{uid}/vehicles`
   /// copy and the public `vehicles` one the QR sticker points at) along
   /// with its uploaded photos and RC card scans. Storage deletes are
@@ -121,6 +140,72 @@ class FirebaseVehicleService implements VehicleService {
     });
 
     return doc.id;
+  }
+
+  @override
+  Future<List<String>> updateVehicle({
+    required String uid,
+    required String vehicleId,
+    required String nickname,
+    required String make,
+    required String model,
+    required String plateNumber,
+    required String colorName,
+    required String dateOfRegistration,
+    required String engineNumber,
+    required String chassisNumber,
+    required String address,
+    required List<String> photos,
+  }) async {
+    final folder = 'vehicle_photos/$uid/$vehicleId';
+    // Unique names, so a new photo never overwrites a kept one that has
+    // shifted into its old index.
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final photoUrls = <String>[];
+    for (var i = 0; i < photos.length; i++) {
+      final photo = photos[i];
+      if (photo.startsWith('http')) {
+        photoUrls.add(photo);
+        continue;
+      }
+      final ref = _storage.ref('$folder/${stamp}_$i.jpg');
+      await ref.putFile(File(photo));
+      photoUrls.add(await ref.getDownloadURL());
+    }
+
+    final batch = _firestore.batch()
+      ..update(_firestore.collection('users').doc(uid).collection('vehicles').doc(vehicleId), {
+        'nickname': nickname,
+        'make': make,
+        'model': model,
+        'plateNumber': plateNumber,
+        'colorName': colorName,
+        'dateOfRegistration': dateOfRegistration,
+        'engineNumber': engineNumber,
+        'chassisNumber': chassisNumber,
+        'address': address,
+        'photoUrls': photoUrls,
+        'updatedAt': FieldValue.serverTimestamp(),
+      })
+      ..update(_firestore.collection('vehicles').doc(vehicleId), {
+        'nickname': nickname,
+        'makeModel': '$make $model'.trim(),
+        'plateNumber': plateNumber,
+        'colorName': colorName,
+        'photoUrl': photoUrls.isNotEmpty ? photoUrls.first : '',
+      });
+    await batch.commit();
+
+    try {
+      final kept = photoUrls.map((url) => _storage.refFromURL(url).fullPath).toSet();
+      final listing = await _storage.ref(folder).listAll();
+      await Future.wait(listing.items.where((ref) => !kept.contains(ref.fullPath)).map((ref) => ref.delete()));
+    } catch (e, stack) {
+      // Best-effort: a leftover file never undoes a saved edit.
+      AppLogger.error('VehicleService', e, stack);
+    }
+
+    return photoUrls;
   }
 
   @override

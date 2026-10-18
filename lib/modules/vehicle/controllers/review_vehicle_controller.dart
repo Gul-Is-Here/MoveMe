@@ -88,11 +88,13 @@ class ReviewVehicleController extends GetxController {
       if (fields.makerName != null) model.text = fields.makerName!;
       if (fields.plateNumber != null) plateNumber.text = fields.plateNumber!;
       if (fields.color != null) color.text = fields.color!;
-      if (fields.dateOfRegistration != null)
+      if (fields.dateOfRegistration != null) {
         dateOfRegistration.text = fields.dateOfRegistration!;
+      }
       if (fields.engineNumber != null) engineNumber.text = fields.engineNumber!;
-      if (fields.chassisNumber != null)
+      if (fields.chassisNumber != null) {
         chassisNumber.text = fields.chassisNumber!;
+      }
       if (fields.address != null) address.text = fields.address!;
 
       if (fields.isMostlyEmpty) {

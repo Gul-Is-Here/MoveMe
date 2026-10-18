@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -8,6 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../app/utils/app_logger.dart';
 import '../../../app/widgets/app_snackbar.dart';
+import '../../../app/widgets/media_viewers.dart';
 import '../../dashboard/models/chat_message_model.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -138,23 +141,92 @@ class ChatBubble extends StatelessWidget {
           child: _VoiceBubbleContent(message: message, isOwner: isOwner),
         );
       case ChatMessageKind.photo:
-        return ClipRRect(
-          borderRadius: radius,
-          child: Container(
-            width: 160,
-            height: 120,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.border, Color(0xFF1B1B18)],
-              ),
-              border: Border.all(color: AppColors.border, width: 1.5),
-            ),
-            child: Icon(Icons.image_outlined, size: 26, color: AppColors.faint),
-          ),
-        );
+      case ChatMessageKind.video:
+        return ClipRRect(borderRadius: radius, child: _MediaBubbleContent(message: message));
     }
+  }
+}
+
+/// A photo or video: the local file while it uploads (with a progress
+/// ring), then the uploaded copy. Tapping opens it full screen.
+class _MediaBubbleContent extends StatelessWidget {
+  const _MediaBubbleContent({required this.message});
+
+  final ChatMessageModel message;
+
+  bool get _isVideo => message.kind == ChatMessageKind.video;
+
+  ImageProvider? get _image {
+    if (!_isVideo && message.localPath != null && !kIsWeb) return FileImage(File(message.localPath!));
+    if (!_isVideo && message.mediaUrl != null) return NetworkImage(message.mediaUrl!);
+    return null;
+  }
+
+  void _open() {
+    final url = message.mediaUrl;
+    if (_isVideo) {
+      if (url != null) showVideoFullScreen(url);
+    } else if (_image case final image?) {
+      showPhotoFullScreen(image);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = message.uploadProgress;
+    final image = _image;
+    return Semantics(
+      button: true,
+      label: _isVideo ? 'Video' : 'Photo',
+      child: GestureDetector(
+        onTap: progress == null ? _open : null,
+        child: Container(
+          width: 200,
+          height: _isVideo ? 140 : 200,
+          color: const Color(0xFF1B1B18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (image != null)
+                Image(
+                  image: image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Icon(Icons.broken_image_outlined, color: AppColors.faint),
+                ),
+              if (_isVideo && progress == null)
+                const Center(child: Icon(Icons.play_circle_fill_rounded, size: 48, color: Colors.white)),
+              if (_isVideo)
+                const Positioned(
+                  left: 10,
+                  bottom: 8,
+                  child: Row(
+                    children: [
+                      Icon(Icons.videocam_rounded, size: 16, color: Colors.white70),
+                      SizedBox(width: 4),
+                      Text('Video', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              if (progress != null)
+                Container(
+                  color: Colors.black45,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: CircularProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      strokeWidth: 3,
+                      color: Colors.white,
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

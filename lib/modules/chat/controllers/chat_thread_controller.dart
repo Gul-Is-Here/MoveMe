@@ -4,12 +4,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 
 import '../../../app/services/conversation_service.dart';
 import '../../dashboard/models/chat_message_model.dart';
 import '../../dashboard/models/message_thread_model.dart';
 import '../../../app/widgets/app_snackbar.dart';
+import '../utils/video_compression.dart';
+import '../widgets/media_source_sheet.dart';
 
 class ChatThreadController extends GetxController {
   ChatThreadController({required this.thread});
@@ -77,11 +80,17 @@ class ChatThreadController extends GetxController {
           .map(
             (m) => ChatMessageModel(
               sender: m.sender == MessageSender.owner ? ChatSender.owner : ChatSender.scanner,
-              kind: m.kind == MessageKind.voice ? ChatMessageKind.voice : ChatMessageKind.text,
+              kind: switch (m.kind) {
+                MessageKind.voice => ChatMessageKind.voice,
+                MessageKind.image => ChatMessageKind.photo,
+                MessageKind.video => ChatMessageKind.video,
+                MessageKind.text => ChatMessageKind.text,
+              },
               timeLabel: _formatTime(m.createdAt),
               text: m.text,
               voiceDuration: m.kind == MessageKind.voice ? _formatDuration(m.durationSeconds) : '',
               audioUrl: m.audioUrl,
+              mediaUrl: m.mediaUrl,
               createdAt: m.createdAt,
             ),
           )
@@ -93,6 +102,7 @@ class ChatThreadController extends GetxController {
       // message has none, so it matches on its (rounded) duration instead
       // — two different recordings of the exact same length sent by the
       // same person in the same second would be a rare false match.
+      // A photo/video matches on its download URL, known once it uploaded.
       _pending.removeWhere(
         (p) =>
             p.status == ChatMessageStatus.sending &&
@@ -100,7 +110,11 @@ class ChatThreadController extends GetxController {
               (c) =>
                   c.sender == p.sender &&
                   c.kind == p.kind &&
-                  (p.kind == ChatMessageKind.voice ? c.voiceDuration == p.voiceDuration : c.text == p.text),
+                  switch (p.kind) {
+                    ChatMessageKind.voice => c.voiceDuration == p.voiceDuration,
+                    ChatMessageKind.photo || ChatMessageKind.video => p.mediaUrl != null && c.mediaUrl == p.mediaUrl,
+                    ChatMessageKind.text => c.text == p.text,
+                  },
             ),
       );
 
@@ -225,7 +239,12 @@ class ChatThreadController extends GetxController {
   void retry(ChatMessageModel message) {
     _pending.removeWhere((m) => m.localId == message.localId);
     _rebuild(_confirmed);
-    _dispatch(message.text);
+    final path = message.localPath;
+    if ((message.kind == ChatMessageKind.photo || message.kind == ChatMessageKind.video) && path != null) {
+      _queueMedia(message.kind, path);
+    } else {
+      _dispatch(message.text);
+    }
   }
 
   /// Starts capturing a voice message. Requests microphone permission
@@ -345,17 +364,78 @@ class ChatThreadController extends GetxController {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  // ---------------------------------------------------------------------
-  // Disabled for this module (see chat_thread_view.dart's _InputBar and
-  // _Header) — kept implemented, not deleted, so document/media sending
-  // and in-app calls can be re-enabled by uncommenting their UI entry
-  // points. Do not remove.
-  // ---------------------------------------------------------------------
+  final _picker = ImagePicker();
 
-  // TODO(FR-05.3): wire to image_picker + Firebase Storage upload.
-  void attachMedia() {
-    AppSnackbar.show('Coming soon', 'Sending photos and videos is not available yet.');
+  /// Photos and videos upload one at a time, in the order they were taken.
+  Future<void> _uploadChain = Future.value();
+
+  /// Camera photo or video, chosen from a small sheet.
+  Future<void> attachMedia() async {
+    final choice = await Get.bottomSheet<ChatMessageKind>(
+      const MediaSourceSheet(),
+      backgroundColor: Colors.transparent,
+    );
+    if (choice == null) return;
+    try {
+      if (choice == ChatMessageKind.photo) {
+        final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 2000);
+        if (photo != null) _queueMedia(ChatMessageKind.photo, photo.path);
+      } else {
+        final video = await _picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(minutes: 1));
+        if (video != null) _queueMedia(ChatMessageKind.video, video.path);
+      }
+    } catch (_) {
+      AppSnackbar.show('Camera unavailable', 'Allow camera access in your device Settings and try again.');
+    }
   }
+
+  void _queueMedia(ChatMessageKind kind, String localPath) {
+    final localId = '${DateTime.now().microsecondsSinceEpoch}';
+    _pending.add(ChatMessageModel(
+      sender: thread.viewerRole == ThreadViewerRole.owner ? ChatSender.owner : ChatSender.scanner,
+      kind: kind,
+      timeLabel: _formatTime(DateTime.now()),
+      localPath: localPath,
+      uploadProgress: 0,
+      status: ChatMessageStatus.sending,
+      createdAt: DateTime.now(),
+      localId: localId,
+    ));
+    _rebuild(_confirmed);
+    _scrollToLatest();
+    _uploadChain = _uploadChain.then((_) => _uploadMedia(localId, kind, localPath));
+  }
+
+  void _updatePending(String localId, ChatMessageModel Function(ChatMessageModel) change) {
+    if (_closed) return;
+    final i = _pending.indexWhere((m) => m.localId == localId);
+    if (i == -1) return;
+    _pending[i] = change(_pending[i]);
+    _rebuild(_confirmed);
+  }
+
+  Future<void> _uploadMedia(String localId, ChatMessageKind kind, String localPath) async {
+    try {
+      var path = localPath;
+      if (kind == ChatMessageKind.video) path = await compressVideo(localPath);
+      final url = await _conversationService.sendMediaMessage(
+        conversationId: thread.conversationId,
+        asOwner: thread.viewerRole == ThreadViewerRole.owner,
+        kind: kind == ChatMessageKind.video ? MessageKind.video : MessageKind.image,
+        localFilePath: path,
+        onProgress: (p) => _updatePending(localId, (m) => m.copyWith(uploadProgress: p)),
+      );
+      _updatePending(localId, (m) => m.copyWith(mediaUrl: url, clearProgress: true));
+    } catch (_) {
+      _updatePending(localId, (m) => m.copyWith(status: ChatMessageStatus.failed, clearProgress: true));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Disabled for this module (see chat_thread_view.dart's _Header) — kept
+  // implemented, not deleted, so in-app calls can be re-enabled by
+  // uncommenting their UI entry points. Do not remove.
+  // ---------------------------------------------------------------------
 
   // TODO(FR-05.4): wire to agora_rtc_engine for in-app audio/video calls.
   void startCall({required bool video}) {

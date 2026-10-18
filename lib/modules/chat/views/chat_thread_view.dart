@@ -294,9 +294,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-// Only used by the call/attachment buttons commented out above — kept so
-// re-enabling them doesn't also mean rebuilding this widget.
-// ignore: unused_element
 class _IconButton extends StatelessWidget {
   const _IconButton({required this.icon, required this.onTap});
 
@@ -371,14 +368,15 @@ class _InputBarState extends State<_InputBar> {
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Disabled for this module — re-enable by uncommenting.
-                  // The controller method behind this (`attachMedia`) is
-                  // untouched.
-                  // Padding(
-                  //   padding: const EdgeInsets.only(bottom: 3),
-                  //   child: _IconButton(icon: Icons.attach_file, onTap: controller.attachMedia),
-                  // ),
-                  // const SizedBox(width: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Semantics(
+                      button: true,
+                      label: 'Send a photo or video',
+                      child: _IconButton(icon: Icons.photo_camera_outlined, onTap: controller.attachMedia),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Container(
                       constraints: const BoxConstraints(minHeight: 42, maxHeight: 132),

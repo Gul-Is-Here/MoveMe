@@ -3,6 +3,17 @@ import 'dart:async';
 import 'package:parktag_app/app/services/conversation_service.dart';
 
 class FakeConversationService implements ConversationService {
+  FakeConversationService({this.publicVehicleLookup});
+
+  /// How [postScannerMessage] finds a vehicle's owner, as the server does.
+  final Future<Map<String, dynamic>?> Function(String vehicleId)? publicVehicleLookup;
+
+  /// Paths handed out by [uploadScannerAttachment].
+  final List<String> uploadedScannerPaths = [];
+
+  /// Set to make [uploadScannerAttachment] fail, to simulate a bad network.
+  bool failUploads = false;
+
   final Map<String, ConversationSummary> _summaries = {};
   final Map<String, List<ConversationMessage>> _messages = {};
 
@@ -290,8 +301,9 @@ class FakeConversationService implements ConversationService {
     yield* _messagesController.stream.map((all) => all[conversationId] ?? const []);
   }
 
-  @override
-  Future<void> sendScannerMessage({
+  /// Test helper: what a scanner's message looks like once the server has
+  /// stored it.
+  Future<void> simulateScannerMessage({
     required String vehicleId,
     required String scannerId,
     required String ownerUid,
@@ -322,6 +334,91 @@ class FakeConversationService implements ConversationService {
       ConversationMessage(sender: MessageSender.scanner, text: text, createdAt: DateTime.now()),
     );
     _emit();
+  }
+
+  @override
+  Future<String> uploadScannerAttachment({
+    required String vehicleId,
+    required String scannerId,
+    required MessageKind kind,
+    required List<int> bytes,
+    required String contentType,
+    void Function(double progress)? onProgress,
+  }) async {
+    if (failUploads) throw Exception('Simulated upload failure');
+    onProgress?.call(1);
+    final path = 'conversations/${conversationIdFor(vehicleId, scannerId)}/scanner/${uploadedScannerPaths.length}';
+    uploadedScannerPaths.add(path);
+    return path;
+  }
+
+  @override
+  Future<void> postScannerMessage({
+    required String vehicleId,
+    required String scannerId,
+    required String scannerName,
+    required String text,
+    List<ScannerAttachment> attachments = const [],
+    ScanLocation? location,
+  }) async {
+    final vehicle = await publicVehicleLookup?.call(vehicleId);
+    if (vehicle == null) throw Exception('not-found');
+    await simulateScannerMessage(
+      vehicleId: vehicleId,
+      scannerId: scannerId,
+      ownerUid: vehicle['ownerUid'] as String,
+      plateNumber: vehicle['plateNumber'] as String? ?? '',
+      colorName: vehicle['colorName'] as String? ?? '',
+      scannerName: scannerName,
+      text: text.isEmpty ? previewFor(attachments.last.kind, '') : text,
+    );
+    final thread = _messages[conversationIdFor(vehicleId, scannerId)]!;
+    if (text.isEmpty) thread.removeLast();
+    for (final a in attachments) {
+      thread.add(ConversationMessage(
+        sender: MessageSender.scanner,
+        text: '',
+        kind: a.kind,
+        audioUrl: a.kind == MessageKind.voice ? 'https://fake/${a.storagePath}' : null,
+        mediaUrl: a.kind == MessageKind.voice ? null : 'https://fake/${a.storagePath}',
+        durationSeconds: a.durationSeconds,
+        createdAt: DateTime.now(),
+      ));
+    }
+    _emit();
+  }
+
+  final List<String> sentMediaPaths = [];
+
+  /// Visits recorded by [logScanVisit].
+  final List<String> loggedVisits = [];
+
+  @override
+  Future<void> logScanVisit({required String vehicleId, required String scannerId, ScanLocation? location}) async {
+    loggedVisits.add(vehicleId);
+  }
+
+  @override
+  Future<String> sendMediaMessage({
+    required String conversationId,
+    required bool asOwner,
+    required MessageKind kind,
+    required String localFilePath,
+    void Function(double progress)? onProgress,
+  }) async {
+    onProgress?.call(0.5);
+    onProgress?.call(1);
+    sentMediaPaths.add(localFilePath);
+    final url = 'https://fake/$localFilePath';
+    _messages.putIfAbsent(conversationId, () => []).add(ConversationMessage(
+      sender: asOwner ? MessageSender.owner : MessageSender.scanner,
+      text: '',
+      kind: kind,
+      mediaUrl: url,
+      createdAt: DateTime.now(),
+    ));
+    _emit();
+    return url;
   }
 
   @override

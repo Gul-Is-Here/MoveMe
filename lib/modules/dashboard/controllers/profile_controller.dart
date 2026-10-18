@@ -27,6 +27,11 @@ class ProfileController extends GetxController {
   /// shows it.
   final notificationsPermitted = true.obs;
 
+  /// How the resident wants to be reached: 'app' (push notifications) or
+  /// 'web' (the chat link). Null until loaded or if never chosen.
+  final communicationPreference = RxnString();
+  final isSavingPreference = false.obs;
+
   @override
   void onReady() {
     super.onReady();
@@ -59,6 +64,7 @@ class ProfileController extends GetxController {
       if (data != null) {
         name.text = (data['name'] as String?) ?? '';
         cnic.value = (data['cnic'] as String?) ?? '';
+        communicationPreference.value = data['communicationPreference'] as String?;
       }
     }
 
@@ -77,6 +83,26 @@ class ProfileController extends GetxController {
     await _authService.updateResidentProfile(uid: uid, name: name.text.trim());
     isSaving.value = false;
     AppSnackbar.show('Profile updated', 'Your details have been saved.');
+  }
+
+  void openMyOrders() => Get.toNamed(AppRoutes.myOrders);
+
+  Future<void> setCommunicationPreference(String preference) async {
+    final uid = _authService.currentUid;
+    if (uid == null || isSavingPreference.value || communicationPreference.value == preference) return;
+    final previous = communicationPreference.value;
+    communicationPreference.value = preference;
+    isSavingPreference.value = true;
+    try {
+      await _authService.saveCommunicationPreference(uid: uid, preference: preference);
+      if (preference == 'app') await _pushService.syncToken();
+    } catch (e, s) {
+      AppLogger.error('Profile', e, s);
+      communicationPreference.value = previous;
+      AppSnackbar.show("Couldn't save your choice", 'Check your connection and try again.');
+    } finally {
+      isSavingPreference.value = false;
+    }
   }
 
   Future<void> logout() async {

@@ -29,7 +29,7 @@ void main() {
     Get.reset();
     fakeVehicles = FakeVehicleService();
     Get.put<VehicleService>(fakeVehicles);
-    Get.put<ConversationService>(FakeConversationService());
+    Get.put<ConversationService>(FakeConversationService(publicVehicleLookup: fakeVehicles.fetchPublicVehicle));
     Get.put<DeepLinkService>(FakeDeepLinkService());
     await fakeVehicles.saveVehicle(
       uid: 'resident-1',

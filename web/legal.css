@@ -168,12 +168,13 @@ code { font-size: .88em; background: var(--surface-2); border: 1px solid var(--b
 /* ---------- Glance cards (overlap the hero) ---------- */
 .glance-wrap { max-width: 1160px; margin: -52px auto 0; padding: 0 20px; position: relative; z-index: 2; }
 .glance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.glance > div {
+.glance > * {
+  display: block; text-decoration: none; color: var(--ink);
   background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
   padding: 20px; box-shadow: var(--shadow);
   transition: transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s;
 }
-.glance > div:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent-ring); }
+.glance > *:hover { color: var(--ink); transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent-ring); }
 .glance .icon {
   width: 42px; height: 42px; border-radius: 13px; margin-bottom: 14px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: #fff;
@@ -188,7 +189,6 @@ code { font-size: .88em; background: var(--surface-2); border: 1px solid var(--b
   max-width: 1160px; margin: 0 auto; padding: 44px 20px 80px;
   display: grid; grid-template-columns: 260px 1fr; gap: 40px; align-items: start;
 }
-.layout.narrow { max-width: 860px; grid-template-columns: 1fr; padding-top: 0; }
 .toc {
   position: sticky; top: 84px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
@@ -311,24 +311,67 @@ ul li::before {
 .contact a:not(.btn) { color: #fff; }
 
 /* ---------- Delete-account page ---------- */
-.ways { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: -52px 0 22px; position: relative; z-index: 2; }
-.way {
-  display: flex; gap: 14px; align-items: flex-start; text-decoration: none; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px;
-  box-shadow: var(--shadow);
-  transition: transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s;
+/* The app's real "Delete account?" dialog inside the scanner brackets. */
+.dialog-mark { width: 300px; height: auto; padding: 26px; }
+.dialog {
+  position: relative; width: 100%; padding: 20px 20px 14px; border-radius: 18px;
+  background: #1F1D1A; border: 1px solid rgba(255, 255, 255, .08); color: var(--hero-ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5), 0 0 70px rgba(228, 87, 46, .25);
+  animation: float 6s ease-in-out infinite;
 }
-.way:hover { color: var(--ink); transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent-ring); }
-.way .icon {
-  flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: #fff;
-  box-shadow: 0 8px 18px rgba(228, 87, 46, .3);
+.dialog-icon {
+  width: 40px; height: 40px; border-radius: 12px; margin-bottom: 12px; display: grid; place-items: center;
+  background: rgba(229, 103, 94, .16); color: #E5675E;
 }
-.way .icon svg { width: 22px; height: 22px; }
-.way h3 { margin: 0 0 2px; font-size: 17px; }
-.way p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.way .go { margin-left: auto; align-self: center; color: var(--faint); transition: transform .3s var(--ease), color .3s; }
-.way:hover .go { color: var(--accent); transform: translateX(4px); }
+.dialog-icon svg { width: 20px; height: 20px; }
+.dialog b { font-family: "Space Grotesk", sans-serif; font-size: 18px; }
+.dialog p { margin: 6px 0 14px; font-size: 13.5px; line-height: 1.55; color: var(--hero-muted); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 6px; font-size: 14px; font-weight: 700; }
+.dialog-actions span { padding: 6px 12px; border-radius: 10px; color: var(--hero-muted); }
+.dialog-actions .danger { color: #E5675E; background: rgba(229, 103, 94, .12); }
+
+/* Email request preview */
+.mail-mock {
+  margin: 16px 0; border-radius: 16px; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.mail-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 15px;
+}
+.mail-row .label {
+  flex: none; width: 58px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--faint);
+}
+.mail-value { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.mail-body { padding: 14px 16px; font-size: 15px; color: var(--muted); }
+.mail-body .blank { color: var(--ink); background: var(--accent-soft); border-radius: 6px; padding: 0 6px; font-weight: 600; }
+.copy {
+  display: none; align-items: center; gap: 6px; cursor: pointer;
+  font: 700 13px/1 "Manrope", sans-serif; color: var(--accent-deep);
+  background: var(--accent-soft); border: 0; border-radius: 999px; padding: 7px 12px;
+  transition: background .2s, color .2s;
+}
+.js .copy { display: inline-flex; }
+.copy svg { width: 14px; height: 14px; }
+.copy:hover { background: var(--accent); color: #fff; }
+.copy.done { background: var(--good-soft); color: var(--good); }
+
+/* "Before you delete" cards */
+.consider { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 6px; }
+.consider > div {
+  padding: 18px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border);
+  transition: border-color .25s, transform .25s var(--ease);
+}
+.consider > div:hover { border-color: var(--accent-ring); transform: translateY(-2px); }
+.consider .icon {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.consider .icon.warn { background: var(--warn-soft); color: var(--warn); }
+.consider .icon svg { width: 19px; height: 19px; }
+.consider h3 { margin: 12px 0 4px; }
+.consider p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--muted); }
+
 .badge {
   display: inline-block; margin-left: 6px; vertical-align: 2px;
   font: 800 10px/1 "Manrope", sans-serif; letter-spacing: .08em; text-transform: uppercase;
@@ -371,7 +414,10 @@ ul.keep li::after {
 }
 
 @media (max-width: 620px) {
-  .ways, .data-grid { grid-template-columns: 1fr; }
+  .data-grid, .consider { grid-template-columns: 1fr; }
+  .mail-row { gap: 4px 12px; }
+  .mail-row .label { width: 100%; }
+  .mail-value { flex-basis: 220px; font-size: 14.5px; }
 }
 
 /* ---------- Footer ---------- */
@@ -405,7 +451,7 @@ footer { border-top: 1px solid var(--border); }
 .js .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
 .js .reveal.in { opacity: 1; transform: none; }
 /* Keep the hover lift working once a card has revealed. */
-.js .glance > div.reveal.in:hover, .js .way.reveal.in:hover { transform: translateY(-4px); }
+.js .glance > .reveal.in:hover { transform: translateY(-4px); }
 .hero .rise { animation: rise .9s var(--ease) both; }
 .hero .rise.d1 { animation-delay: .08s; }
 .hero .rise.d2 { animation-delay: .16s; }
@@ -447,7 +493,8 @@ footer { border-top: 1px solid var(--border); }
   .hero::before { display: none; }
   .hero p.lead, .pill { color: #333; }
   .layout { display: block; }
-  .content > section, .card-section, .glance > div { box-shadow: none; break-inside: avoid; }
+  .content > section, .card-section, .glance > * { box-shadow: none; break-inside: avoid; }
+  .copy { display: none !important; }
   .contact { background: #fff !important; color: #000; }
   .contact h2, .contact p, .contact .company { color: #000; }
   .js .reveal { opacity: 1; transform: none; }

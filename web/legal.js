@@ -29,6 +29,30 @@
     });
   }
 
+  document.querySelectorAll('.copy[data-copy]').forEach(function (btn) {
+    if (!navigator.clipboard) { btn.remove(); return; }
+    var label = btn.querySelector('span');
+    var value = btn.parentNode.querySelector('.mail-value');
+    function flash(text) {
+      btn.classList.add('done');
+      label.textContent = text;
+      setTimeout(function () { btn.classList.remove('done'); label.textContent = 'Copy'; }, 1800);
+    }
+    btn.addEventListener('click', function () {
+      navigator.clipboard.writeText(btn.getAttribute('data-copy')).then(function () {
+        flash('Copied');
+      }, function () {
+        // Clipboard refused: select the address so it can be copied manually.
+        var range = document.createRange();
+        range.selectNodeContents(value);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        flash('Selected');
+      });
+    });
+  });
+
   if (!('IntersectionObserver' in window)) {
     document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
     return;

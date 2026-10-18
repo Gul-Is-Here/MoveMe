@@ -39,7 +39,7 @@
             </intent-filter>
 
             <!-- FR-09: the public Scan Contact Page's own URL
-                 (https://car-ping-9d4f8.web.app/scan/{vehicleId}), registered
+                 (https://moveme-da262.web.app/scan/{vehicleId}), registered
                  as a verified Android App Link — when this app is installed,
                  tapping that link (from a QR scan, share, or reopening it
                  after installing) opens straight into the app instead of a
@@ -51,7 +51,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="car-ping-9d4f8.web.app" android:pathPrefix="/scan"/>
+                <data android:scheme="https" android:host="moveme-da262.web.app" android:pathPrefix="/scan"/>
             </intent-filter>
         </activity>
         <!-- FCM display configuration. Without these, a push that FCM

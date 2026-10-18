@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:parktag_app/app/services/auth_service.dart';
 
 /// In-memory stand-in for [AuthService] so widget tests never touch the
@@ -40,21 +42,58 @@ class FakeAuthService implements AuthService {
     required void Function(String verificationId) onCodeSent,
     required void Function(String message) onError,
   }) async {
+    _pendingPhone = e164Phone;
     onCodeSent('fake-verification-id');
   }
+
+  /// The number the last [sendOtp] went to — becomes [currentPhone] on
+  /// [confirmOtp], as Firebase's phone sign-in does.
+  String? _pendingPhone;
 
   @override
   Future<String> confirmOtp({required String verificationId, required String smsCode}) async {
     _signedIn = true;
     _currentUid ??= 'fake-uid-${_uidSeq++}';
+    _currentPhone ??= _pendingPhone;
     return _currentUid!;
   }
 
+  /// The number that gets the admin side, like the server's ADMIN_PHONE.
+  String adminPhone = '+923079618674';
+  bool adminClaimed = false;
+
   @override
-  Future<bool> phoneIsRegistered(String e164Phone) async {
-    if (registerAllByDefault) return true;
-    return registeredPhones.contains(e164Phone);
+  Future<PhoneLookup> lookupPhone(String e164Phone) async {
+    final isAdmin = e164Phone == adminPhone;
+    final registered = !isAdmin && (registerAllByDefault || registeredPhones.contains(e164Phone));
+    return PhoneLookup(registered: registered, isAdmin: isAdmin, blocked: blockedPhones.contains(e164Phone));
   }
+
+  @override
+  Future<void> claimAdminRole() async {
+    if (_currentPhone != adminPhone) throw StateError('Not the admin number');
+    adminClaimed = true;
+  }
+
+  final _forcedSignOuts = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get forcedSignOuts => _forcedSignOuts.stream;
+
+  /// Simulates Firebase signing this device out because the account was
+  /// blocked elsewhere.
+  void simulateForcedSignOut() {
+    _signedIn = false;
+    _currentUid = null;
+    _currentPhone = null;
+    _forcedSignOuts.add(null);
+  }
+
+  /// Phones the admin has blocked; [lookupPhone] reports them.
+  final Set<String> blockedPhones = {};
+
+  @override
+  Future<bool> isAdmin() async => _signedIn && adminClaimed && _currentPhone == adminPhone;
 
   @override
   Future<void> createResidentProfile({

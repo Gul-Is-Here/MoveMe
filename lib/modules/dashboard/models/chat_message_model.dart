@@ -1,7 +1,7 @@
 /// FR-05: a single message inside a vehicle's chat thread with one scanner.
 enum ChatSender { owner, scanner }
 
-enum ChatMessageKind { text, voice, photo }
+enum ChatMessageKind { text, voice, photo, video }
 
 /// How far an *outgoing* message has got.
 ///
@@ -29,6 +29,9 @@ class ChatMessageModel {
     this.text = '',
     this.voiceDuration = '',
     this.audioUrl,
+    this.mediaUrl,
+    this.localPath,
+    this.uploadProgress,
     this.status = ChatMessageStatus.sent,
     this.createdAt,
     this.localId,
@@ -44,6 +47,15 @@ class ChatMessageModel {
   /// Null for an optimistic voice message still uploading.
   final String? audioUrl;
 
+  /// Download URL of a [ChatMessageKind.photo] or [ChatMessageKind.video].
+  final String? mediaUrl;
+
+  /// The file on this device while a photo/video this device sent uploads.
+  final String? localPath;
+
+  /// 0-1 while this device's photo/video uploads; null otherwise.
+  final double? uploadProgress;
+
   /// Only meaningful for messages this device sent.
   final ChatMessageStatus status;
 
@@ -55,15 +67,25 @@ class ChatMessageModel {
   /// right one.
   final String? localId;
 
-  ChatMessageModel copyWith({ChatMessageStatus? status, String? audioUrl}) => ChatMessageModel(
-    sender: sender,
-    kind: kind,
-    timeLabel: timeLabel,
-    text: text,
-    voiceDuration: voiceDuration,
-    audioUrl: audioUrl ?? this.audioUrl,
-    status: status ?? this.status,
-    createdAt: createdAt,
-    localId: localId,
-  );
+  ChatMessageModel copyWith({
+    ChatMessageStatus? status,
+    String? audioUrl,
+    String? mediaUrl,
+    double? uploadProgress,
+    bool clearProgress = false,
+  }) =>
+      ChatMessageModel(
+        sender: sender,
+        kind: kind,
+        timeLabel: timeLabel,
+        text: text,
+        voiceDuration: voiceDuration,
+        audioUrl: audioUrl ?? this.audioUrl,
+        mediaUrl: mediaUrl ?? this.mediaUrl,
+        localPath: localPath,
+        uploadProgress: clearProgress ? null : uploadProgress ?? this.uploadProgress,
+        status: status ?? this.status,
+        createdAt: createdAt,
+        localId: localId,
+      );
 }

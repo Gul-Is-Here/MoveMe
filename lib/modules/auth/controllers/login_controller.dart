@@ -23,11 +23,11 @@ class LoginController extends GetxController {
     final e164Phone = '+92${phone.text.trim()}';
     isSubmitting.value = true;
 
-    // FR-01.2: only a registered resident can log in — anyone else is sent
-    // to sign up first.
-    final bool registered;
+    // FR-01.2: only a registered resident (or the admin) can log in —
+    // anyone else is sent to sign up first.
+    final PhoneLookup lookup;
     try {
-      registered = await _authService.phoneIsRegistered(e164Phone);
+      lookup = await _authService.lookupPhone(e164Phone);
     } catch (e, stack) {
       AppLogger.error('Login', e, stack);
       isSubmitting.value = false;
@@ -37,7 +37,12 @@ class LoginController extends GetxController {
       );
       return;
     }
-    if (!registered) {
+    if (lookup.blocked) {
+      isSubmitting.value = false;
+      AppSnackbar.show('Account blocked', 'This account has been blocked. Contact MoveMe if you think this is a mistake.');
+      return;
+    }
+    if (!lookup.registered && !lookup.isAdmin) {
       isSubmitting.value = false;
       AppSnackbar.show('No account found', 'This number is not registered yet — please sign up first.');
       return;
@@ -52,7 +57,7 @@ class LoginController extends GetxController {
           arguments: {
             'phone': phone.text.trim(),
             'verificationId': verificationId,
-            'mode': 'login',
+            'mode': lookup.isAdmin ? 'admin' : 'login',
           },
         );
       },

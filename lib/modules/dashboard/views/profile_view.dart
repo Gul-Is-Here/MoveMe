@@ -126,6 +126,27 @@ class _ProfileForm extends StatelessWidget {
         ),
         const SizedBox(height: 14),
 
+        RiseIn(
+          order: 4,
+          child: FormSectionCard(
+            icon: Icons.receipt_long_outlined,
+            title: 'QR stickers',
+            spacing: 10,
+            children: [
+              _AccountAction(
+                icon: Icons.local_shipping_outlined,
+                label: 'My Orders',
+                subtitle: 'Track your QR sticker orders',
+                onTap: controller.openMyOrders,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        RiseIn(order: 4, child: _ReachPreferenceCard(controller: controller)),
+        const SizedBox(height: 14),
+
         const RiseIn(order: 4, child: _AppearanceCard()),
         const SizedBox(height: 14),
 
@@ -951,6 +972,106 @@ class _LoadingState extends StatelessWidget {
           const SizedBox(height: 14),
           card(190),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// How should we reach you?
+// ---------------------------------------------------------------------------
+
+class _ReachPreferenceCard extends StatelessWidget {
+  const _ReachPreferenceCard({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return FormSectionCard(
+      icon: Icons.notifications_active_outlined,
+      title: 'How should we reach you?',
+      spacing: 10,
+      children: [
+        Obx(() {
+          final selected = controller.communicationPreference.value;
+          return Column(
+            children: [
+              _ReachOption(
+                icon: Icons.phone_iphone_rounded,
+                title: 'In this app',
+                subtitle: 'Push notifications when someone messages you (recommended)',
+                selected: selected == 'app',
+                onTap: () => controller.setCommunicationPreference('app'),
+              ),
+              const SizedBox(height: 10),
+              _ReachOption(
+                icon: Icons.link_rounded,
+                title: 'On the web link',
+                subtitle: "For when you'd rather not keep the app installed",
+                selected: selected == 'web',
+                onTap: () => controller.setCommunicationPreference('web'),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _ReachOption extends StatelessWidget {
+  const _ReachOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.yellow;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Pressable(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? accent.withValues(alpha: 0.1) : AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: selected ? accent : Colors.transparent, width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: selected ? accent : AppColors.muted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.buttonLabel.copyWith(color: AppColors.ink, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.muted, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                color: selected ? accent : AppColors.faint,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

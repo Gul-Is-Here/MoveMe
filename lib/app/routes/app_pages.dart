@@ -1,5 +1,10 @@
 import 'package:get/get.dart';
 
+import '../../modules/admin/bindings/admin_binding.dart';
+import '../../modules/admin/admin_navigation.dart';
+import '../../modules/admin/views/admin_order_view.dart';
+import '../../modules/admin/views/admin_user_view.dart';
+import '../../modules/admin/views/admin_view.dart';
 import '../../modules/auth/bindings/auth_binding.dart';
 import '../../modules/auth/views/login_view.dart';
 import '../../modules/auth/views/signup_view.dart';
@@ -15,6 +20,11 @@ import '../../modules/onboarding/bindings/onboarding_binding.dart';
 import '../../modules/onboarding/views/onboarding_view.dart';
 import '../../modules/qr_scanner/bindings/qr_scanner_binding.dart';
 import '../../modules/qr_scanner/views/qr_scanner_view.dart';
+import '../../modules/orders/bindings/order_details_binding.dart';
+import '../../modules/orders/bindings/order_form_binding.dart';
+import '../../modules/orders/views/my_orders_view.dart';
+import '../../modules/orders/views/order_details_view.dart';
+import '../../modules/orders/views/order_form_view.dart';
 import '../../modules/otp/bindings/otp_binding.dart';
 import '../../modules/otp/views/otp_view.dart';
 import '../../modules/scan/bindings/scan_contact_binding.dart';
@@ -104,6 +114,36 @@ class AppPages {
       name: AppRoutes.qrScanner,
       page: () => const QrScannerView(),
       binding: QrScannerBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.admin,
+      page: () => const AdminView(),
+      binding: AdminBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.adminOrder,
+      page: () => const AdminOrderView(),
+      binding: AdminOrderBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.adminUser,
+      page: () => AdminUserView(uid: (Get.arguments as AdminUserArgs).uid),
+      binding: AdminUserBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.orderStickers,
+      page: () => const OrderFormView(),
+      binding: OrderFormBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.myOrders,
+      page: () => const MyOrdersView(),
+      binding: MyOrdersBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.orderDetails,
+      page: () => const OrderDetailsView(),
+      binding: OrderDetailsBinding(),
     ),
     GetPage(
       name: AppRoutes.scanContact,

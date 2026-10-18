@@ -50,6 +50,46 @@ class FakeVehicleService implements VehicleService {
     return id;
   }
 
+  /// Set to force [updateVehicle] to throw, to simulate a failed save.
+  bool throwOnUpdate = false;
+
+  @override
+  Future<List<String>> updateVehicle({
+    required String uid,
+    required String vehicleId,
+    required String nickname,
+    required String make,
+    required String model,
+    required String plateNumber,
+    required String colorName,
+    required String dateOfRegistration,
+    required String engineNumber,
+    required String chassisNumber,
+    required String address,
+    required List<String> photos,
+  }) async {
+    if (throwOnUpdate) {
+      throw Exception('Simulated update failure');
+    }
+    final index = saved.indexWhere((v) => v['id'] == vehicleId);
+    if (index == -1) throw StateError('No vehicle $vehicleId');
+    saved[index] = {
+      ...saved[index],
+      'nickname': nickname,
+      'make': make,
+      'model': model,
+      'plateNumber': plateNumber,
+      'colorName': colorName,
+      'dateOfRegistration': dateOfRegistration,
+      'engineNumber': engineNumber,
+      'chassisNumber': chassisNumber,
+      'address': address,
+      'photoPaths': photos,
+    };
+    _vehiclesController.add(List.of(saved));
+    return photos;
+  }
+
   @override
   Future<void> deleteVehicle({required String uid, required String vehicleId}) async {
     if (throwOnDelete) {

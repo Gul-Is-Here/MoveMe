@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Delete MoveMe Account</title>
-  <meta name="description" content="How to delete your MoveMe account and what data is deleted or kept.">
+  <meta name="description" content="How to delete your MoveMe account, in the app or by email, and exactly what data is deleted or kept.">
   <meta name="theme-color" content="#141312">
   <link rel="icon" href="favicon.png">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -19,7 +19,7 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="privacy-policy.html">
+    <a class="brand" href="#top">
       <img src="icons/Icon-192.png" alt="" width="34" height="34">
       <span class="brand-name">Move<b>Me</b></span>
     </a>
@@ -33,67 +33,158 @@
 <section class="hero" id="top">
   <span class="orb one" aria-hidden="true"></span>
   <span class="orb two" aria-hidden="true"></span>
-  <div class="hero-inner" style="max-width:860px">
+  <div class="hero-inner">
     <div>
       <span class="eyebrow rise">Account &amp; data</span>
-      <h1 class="rise d1">Delete your <span class="grad">MoveMe</span> account</h1>
-      <p class="lead rise d2">You can permanently delete your <strong>MoveMe</strong> account (by <strong>Whole Choice LTD</strong>) and all data linked to it at any time &mdash; right inside the app, or by emailing us.</p>
+      <h1 class="rise d1">Delete your <span class="grad">account</span></h1>
+      <p class="lead rise d2">You can permanently delete your <strong>MoveMe</strong> account and <strong>everything linked to it</strong> at any time &mdash; in a few taps inside the app, or by emailing us if you can&rsquo;t get in.</p>
+      <div class="meta rise d3">
+        <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>In the app: instant</span>
+        <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>By email: within 30 days</span>
+        <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Last updated 28 September 2026</span>
+      </div>
+    </div>
+    <div class="scan-mark dialog-mark rise d4" aria-hidden="true">
+      <div class="dialog">
+        <div class="dialog-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5"/></svg></div>
+        <b>Delete account?</b>
+        <p>This will permanently delete your account, vehicles, QR stickers, and messages. This can&rsquo;t be undone.</p>
+        <div class="dialog-actions"><span>Cancel</span><span class="danger">Delete</span></div>
+      </div>
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+      <span class="beam"></span>
     </div>
   </div>
 </section>
 
-<div class="layout narrow">
+<div class="glance-wrap">
+  <div class="glance">
+    <a class="reveal" href="#in-app">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 18h.01"/></svg></div>
+      <h3>In the app <span class="badge">Fastest</span></h3>
+      <p>Profile &rarr; Delete Account. Done immediately.</p>
+    </a>
+    <a class="reveal" href="#email">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
+      <h3>By email</h3>
+      <p>Lost your phone or can&rsquo;t sign in? We&rsquo;ll do it for you.</p>
+    </a>
+    <a class="reveal" href="#data">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></div>
+      <h3>Everything goes</h3>
+      <p>Profile, vehicles, photos, stickers and messages.</p>
+    </a>
+    <a class="reveal" href="#before">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+      <h3>Can&rsquo;t be undone</h3>
+      <p>Your QR stickers stop working straight away.</p>
+    </a>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <p>On this page</p>
+    <ol>
+      <li><a href="#in-app">Delete in the app</a></li>
+      <li><a href="#email">Delete by email</a></li>
+      <li><a href="#before">Before you delete</a></li>
+      <li><a href="#data">What happens to your data</a></li>
+      <li><a href="#contact">Questions</a></li>
+    </ol>
+  </nav>
+
   <main class="content">
-    <nav class="ways" aria-label="Ways to delete your account">
-      <a class="way reveal" href="#in-app">
-        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 18h.01"/></svg></span>
-        <span>
-          <h3>In the app <span class="badge">Fastest</span></h3>
-          <p>Deletion happens immediately.</p>
-        </span>
-        <svg class="go" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </a>
-      <a class="way reveal" href="#email">
-        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
-        <span>
-          <h3>By email</h3>
-          <p>No access to the app? We&rsquo;ll do it for you.</p>
-        </span>
-        <svg class="go" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </a>
-    </nav>
+    <section class="intro reveal">
+      <p>MoveMe is operated by Whole Choice LTD. This page explains how to delete your account in the MoveMe app (package <code>com.parktagapp.mobile</code>) and what happens to your information when you do.</p>
+    </section>
 
     <section id="in-app" class="reveal">
       <h2><span class="num">1</span>Delete it in the app</h2>
-      <p class="muted">The fastest way. Deletion happens immediately.</p>
+      <p class="muted">The fastest way &mdash; your data is removed as soon as you confirm.</p>
+      <p class="path"><span>Profile</span>&rarr;<span>Delete Account</span>&rarr;<span>Delete</span></p>
       <ol class="timeline">
-        <li><div>Open the <strong>MoveMe</strong> app and sign in with your phone number.</div></li>
+        <li><div>Open the <strong>MoveMe</strong> app and sign in with the phone number of the account you want to delete.</div></li>
         <li><div>Tap the <span class="tag">Profile</span> tab at the bottom of the screen.</div></li>
         <li><div>Scroll down and tap <span class="tag">Delete Account</span>.</div></li>
         <li><div>Read the warning and tap <span class="tag">Delete</span> to confirm. You&rsquo;ll be signed out once your data has been removed.</div></li>
       </ol>
       <div class="callout amber">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-        <p>Uninstalling the app does <strong>not</strong> delete your account. Please use the steps above or the email option below.</p>
+        <p>Uninstalling the app does <strong>not</strong> delete your account. Please use the steps above or email us.</p>
       </div>
     </section>
 
     <section id="email" class="reveal">
       <h2><span class="num">2</span>No access to the app? Email us</h2>
-      <p>Send an email from any address to <a href="mailto:muhammadbilal198720@gmail.com?subject=Delete%20my%20MoveMe%20account">muhammadbilal198720@gmail.com</a> with:</p>
-      <ul class="keep">
-        <li>The subject <strong>&ldquo;Delete my MoveMe account&rdquo;</strong></li>
-        <li>The <strong>phone number</strong> registered to your account</li>
-      </ul>
-      <p class="muted">To protect you, we may send a one-time code to that number to confirm the request is really yours. We complete email requests within 30 days, and confirm by email once it&rsquo;s done.</p>
-      <a class="btn" href="mailto:muhammadbilal198720@gmail.com?subject=Delete%20my%20MoveMe%20account">
+      <p>Send an email from any address with the subject <strong>&ldquo;Delete my MoveMe account&rdquo;</strong> and the <strong>phone number</strong> registered to your account.</p>
+
+      <div class="mail-mock">
+        <div class="mail-row">
+          <span class="label">To</span>
+          <span class="mail-value">muhammadbilal198720@gmail.com</span>
+          <button class="copy" type="button" data-copy="muhammadbilal198720@gmail.com" aria-label="Copy email address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <span>Copy</span>
+          </button>
+        </div>
+        <div class="mail-row">
+          <span class="label">Subject</span>
+          <span class="mail-value"><b>Delete my MoveMe account</b></span>
+        </div>
+        <div class="mail-body">
+          Please delete my MoveMe account and all data linked to it.<br>
+          Registered phone number: <span class="blank">+92 3XX XXXXXXX</span>
+        </div>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <h3>We confirm it&rsquo;s you</h3>
+          <p>To protect you, we may send a one-time code to your registered number before deleting anything.</p>
+        </div>
+        <div class="step-card">
+          <h3>Done within 30 days</h3>
+          <p>We complete email requests within 30 days and reply to let you know once it&rsquo;s done.</p>
+        </div>
+      </div>
+
+      <a class="btn" href="mailto:muhammadbilal198720@gmail.com?subject=Delete%20my%20MoveMe%20account&amp;body=Please%20delete%20my%20MoveMe%20account%20and%20all%20data%20linked%20to%20it.%0ARegistered%20phone%20number%3A%20">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
         Email a deletion request
       </a>
     </section>
 
+    <section id="before" class="reveal">
+      <h2><span class="num">3</span>Before you delete</h2>
+      <div class="consider">
+        <div>
+          <span class="icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M4 20L20 4"/></svg></span>
+          <h3>It&rsquo;s permanent</h3>
+          <p>We can&rsquo;t restore your account, vehicles or messages once they&rsquo;re deleted.</p>
+        </div>
+        <div>
+          <span class="icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21h-4M21 14v3"/></svg></span>
+          <h3>Stickers stop working</h3>
+          <p>Anyone who scans your QR stickers won&rsquo;t be able to reach you. You may want to peel them off.</p>
+        </div>
+        <div>
+          <span class="icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+          <h3>Chats vanish for both sides</h3>
+          <p>Conversations are removed for you and for the other person in them.</p>
+        </div>
+        <div>
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H3v-5l2.2-5h13.6L21 12v5h-2"/><path d="M3 12h18"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/><path d="M9.5 17h5"/></svg></span>
+          <h3>Just one car?</h3>
+          <p>Open that vehicle and tap <span class="tag">Remove Vehicle</span> instead &mdash; your account stays.</p>
+        </div>
+      </div>
+      <p class="note">Signing up again later with the same number starts a brand-new, empty account.</p>
+    </section>
+
     <section id="data" class="reveal">
-      <h2><span class="num">3</span>What happens to your data</h2>
+      <h2><span class="num">4</span>What happens to your data</h2>
       <div class="data-grid">
         <div class="data-card del">
           <h3><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>Permanently deleted</h3>
@@ -114,17 +205,23 @@
             <li><strong>Server logs:</strong> technical logs that may contain your account ID are kept for up to <strong>30 days</strong> for security and troubleshooting.</li>
             <li><strong>Legal:</strong> limited records we are required by law to keep, only for as long as the law requires.</li>
           </ul>
-          <p class="muted" style="margin-bottom:0">Nothing is kept for advertising or sold to anyone.</p>
+          <div class="callout">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <p>Nothing is kept for advertising or sold to anyone.</p>
+          </div>
         </div>
       </div>
+      <p class="note">More detail on how we handle your information is in our <a href="privacy-policy.html#retention">Privacy Policy</a>.</p>
     </section>
 
     <section id="contact" class="contact reveal">
       <div>
-        <h2><span class="num">4</span>Questions</h2>
-        <p>Contact us at <a href="mailto:muhammadbilal198720@gmail.com">muhammadbilal198720@gmail.com</a>. You can also read our full <a href="privacy-policy.html">Privacy Policy</a>.</p>
+        <h2><span class="num">5</span>Questions</h2>
+        <p>Need help deleting your account, or have a question about your data?</p>
+        <p><span class="company">Whole Choice LTD</span> (MoveMe) &middot; Pakistan</p>
+        <p>muhammadbilal198720@gmail.com</p>
       </div>
-      <a class="btn light" href="mailto:muhammadbilal198720@gmail.com">
+      <a class="btn light" href="mailto:muhammadbilal198720@gmail.com?subject=MoveMe%20account%20question">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
         Email us
       </a>
@@ -134,7 +231,7 @@
 
 <footer>
   <div class="footer-inner">
-    <a class="brand" href="privacy-policy.html">
+    <a class="brand" href="#top">
       <img src="icons/Icon-192.png" alt="" width="26" height="26">
       <span class="brand-name">Move<b>Me</b></span>
     </a>

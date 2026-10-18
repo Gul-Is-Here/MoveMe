@@ -16,7 +16,7 @@ void main() {
     () async {
       final service = FakeConversationService();
 
-      await service.sendScannerMessage(
+      await service.simulateScannerMessage(
         vehicleId: 'v1',
         scannerId: 'scanner-A',
         ownerUid: 'resident-1',
@@ -25,7 +25,7 @@ void main() {
         scannerName: 'Ali',
         text: 'Please move your car',
       );
-      await service.sendScannerMessage(
+      await service.simulateScannerMessage(
         vehicleId: 'v1',
         scannerId: 'scanner-B',
         ownerUid: 'resident-1',
@@ -60,7 +60,7 @@ void main() {
   test('Reopening the same conversationId (the same scanner returning) continues the existing thread', () async {
     final service = FakeConversationService();
 
-    await service.sendScannerMessage(
+    await service.simulateScannerMessage(
       vehicleId: 'v1',
       scannerId: 'scanner-A',
       ownerUid: 'resident-1',
@@ -69,7 +69,7 @@ void main() {
       scannerName: 'Ali',
       text: 'First message',
     );
-    await service.sendScannerMessage(
+    await service.simulateScannerMessage(
       vehicleId: 'v1',
       scannerId: 'scanner-A',
       ownerUid: 'resident-1',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../app/widgets/glass.dart';
 
 /// A stylised registration plate: always light with dark lettering like a
 /// real plate (regardless of app theme), an accent "PK" band, and screw
@@ -59,13 +60,16 @@ class NumberPlate extends StatelessWidget {
               children: [
                 Container(
                   width: compact ? 22 : 30,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [accent, AppColors.accentDeep],
-                    ),
-                  ),
+                  // Solid on the admin side, which uses no gradients.
+                  decoration: GlassScope.of(context)
+                      ? BoxDecoration(color: accent)
+                      : BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [accent, AppColors.accentDeep],
+                          ),
+                        ),
                   alignment: Alignment.center,
                   child: RotatedBox(
                     quarterTurns: 3,

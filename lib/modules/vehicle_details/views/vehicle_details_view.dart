@@ -91,6 +91,8 @@ class VehicleDetailsView extends GetView<VehicleDetailsController> {
               RiseIn(order: 1, child: _QrCard(controller: controller, vehicle: vehicle)),
               const SizedBox(height: 12),
               RiseIn(order: 2, child: _ShareButton(controller: controller)),
+              const SizedBox(height: 10),
+              RiseIn(order: 2, child: _OrderStickersButton(onTap: controller.orderStickers)),
               const SizedBox(height: 18),
 
               RiseIn(order: 3, child: _InfoSection(vehicle: vehicle)),
@@ -541,6 +543,39 @@ class _QrCardState extends State<_QrCard> with SingleTickerProviderStateMixin {
               style: AppTextStyles.caption.copyWith(color: AppColors.muted),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderStickersButton extends StatelessWidget {
+  const _OrderStickersButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.yellow;
+    return Semantics(
+      button: true,
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accent.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.local_shipping_outlined, size: 18, color: accent),
+              const SizedBox(width: 9),
+              Text('Order QR stickers', style: AppTextStyles.buttonLabel.copyWith(color: accent, fontSize: 14.5)),
+            ],
+          ),
         ),
       ),
     );

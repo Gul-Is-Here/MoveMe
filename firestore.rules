@@ -3,17 +3,114 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // A resident's own profile (FR-01/FR-08).
+    // The admin is whichever ADMIN_PHONE account last ran the
+    // claimAdminRole Cloud Function, which writes config/admin.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/config/admin)
+        && get(/databases/$(database)/documents/config/admin).data.uid == request.auth.uid;
+    }
+
+    // Written only by claimAdminRole (Admin SDK).
+    match /config/admin {
+      allow read: if isAdmin();
+    }
+
+    function isShortText(value, maxLength) {
+      return value is string && value.size() >= 1 && value.size() <= maxLength;
+    }
+
+    // The price of one QR sticker (Rs). Customers read it to price orders;
+    // only the admin may change it, within Rs 1-100,000.
+    match /settings/store {
+      allow read: if request.auth != null;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['stickerPrice', 'updatedAt'])
+        && request.resource.data.stickerPrice is int
+        && request.resource.data.stickerPrice >= 1
+        && request.resource.data.stickerPrice <= 100000;
+    }
+
+    // Accounts customers pay orders into. Customers see active ones only.
+    match /paymentAccounts/{accountId} {
+      allow read: if isAdmin() || (request.auth != null && resource.data.active == true);
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['method', 'accountNumber', 'accountTitle', 'active', 'createdAt'])
+        && isShortText(request.resource.data.method, 40)
+        && isShortText(request.resource.data.accountNumber, 40)
+        && isShortText(request.resource.data.accountTitle, 80)
+        && request.resource.data.active is bool;
+      allow delete: if isAdmin();
+    }
+
+    function currentStickerPrice() {
+      return exists(/databases/$(database)/documents/settings/store)
+        ? get(/databases/$(database)/documents/settings/store).data.stickerPrice
+        : 500;
+    }
+
+    // Sticker orders; the doc id is the 8-character order number. A
+    // customer creates their own, at the current price, under review; from
+    // then on only the admin moves it along (status + note to the customer).
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (request.auth != null && resource.data.uid == request.auth.uid);
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          'number', 'uid', 'customerName', 'customerPhone', 'items', 'quantity', 'unitPrice',
+          'total', 'delivery', 'payment', 'status', 'note', 'createdAt', 'updatedAt', 'statusTimes'])
+        && request.resource.data.number == orderId
+        && orderId.matches('^[2-9A-HJKMNP-Z]{8}$')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.customerPhone == request.auth.token.phone_number
+        && request.resource.data.status == 'review'
+        && request.resource.data.note == ''
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1
+        && request.resource.data.items.size() <= 20
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity >= 1
+        && request.resource.data.quantity <= 200
+        && request.resource.data.unitPrice == currentStickerPrice()
+        && request.resource.data.total == request.resource.data.unitPrice * request.resource.data.quantity
+        && request.resource.data.payment.amount == request.resource.data.total
+        && request.resource.data.payment.screenshotUrl is string
+        && request.resource.data.payment.screenshotUrl.size() > 0;
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'note', 'statusTimes', 'updatedAt'])
+        && request.resource.data.status in ['review', 'confirmed', 'printing', 'shipped', 'rejected', 'cancelled']
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500;
+    }
+
+    // A resident's own profile (FR-01/FR-08). Name, phone and CNIC are
+    // private: sign-up/login's "is this number registered?" check goes
+    // through the lookupPhone Cloud Function instead of a public read.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-      // Sign-up checks "is this phone already registered" before the
-      // resident is signed in, and Login needs to read another user's doc
-      // to resolve phone -> uid, so registration lookups stay public read.
+      function isSelf() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      allow read: if isSelf() || isAdmin();
+      // `blocked` is set only by the setUserBlocked Cloud Function.
+      allow create: if isSelf() && !request.resource.data.keys().hasAny(['blocked', 'blockedAt']);
+      allow update: if isSelf()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['blocked', 'blockedAt']);
+      allow delete: if isSelf();
+      // TEMPORARY: app builds before 1.0.1 still look numbers up by reading
+      // users directly. Delete this line once 1.0.1+ is the only version
+      // on the Play Store, so profiles become private.
       allow read: if true;
 
       match /vehicles/{vehicleId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+    }
+
+    // The admin's Users tab lists every customer's private vehicle records
+    // with one collection-group query.
+    match /{path=**}/vehicles/{vehicleId} {
+      allow read: if isAdmin();
     }
 
     // FR-04: the denormalized public copy of a vehicle, keyed by the same
@@ -42,18 +139,58 @@ service cloud.firestore {
     // authenticated client is still restricted to acting as whichever
     // side of the conversation it actually is, as defense in depth
     // alongside the trusted Cloud Functions.
+    // The safety log (scan visits, in-app scans, messages): written and
+    // read only by Cloud Functions, never by any app or web page.
+    match /activityLog/{entryId} {
+      allow read, write: if false;
+    }
+
     match /conversations/{conversationId} {
       allow read: if true;
-      allow create: if request.resource.data.ownerUid is string
-        && (request.auth == null || request.auth.uid == request.resource.data.scannerId);
-      allow update: if request.auth == null
-        || request.auth.uid == resource.data.ownerUid
-        || request.auth.uid == resource.data.scannerUid;
+
+      // Created only by the server: postScannerMessage (the web page) and
+      // resolveVehicleAndOpenChat (an in-app scan).
+      allow create: if false;
+
+      // Who the chat is between never changes. The web page (signed out)
+      // may only flip "resolved" and its own read marker; the owner and the
+      // signed-in scanner may update the rest.
+      allow update: if !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['ownerUid', 'vehicleId', 'scannerId', 'scannerUid', 'plateNumber', 'colorName'])
+        && (
+          (request.auth == null
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['resolved', 'unreadForScanner', 'unreadCountForScanner']))
+          || (request.auth != null
+            && (request.auth.uid == resource.data.ownerUid
+              || request.auth.uid == resource.data.get('scannerUid', '')))
+        );
 
       match /messages/{messageId} {
+        function chat() {
+          return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+        }
+
+        // A message's photo, video or voice note must live in this chat's
+        // own Storage folder.
+        function inThisChat(url) {
+          return url == ''
+            || url.matches('https://firebasestorage[.]googleapis[.]com/v0/b/[^/]+/o/conversations%2F'
+              + conversationId + '%2F.*');
+        }
+
         allow read: if true;
-        allow create: if request.resource.data.sender in ['owner', 'scanner']
-          && request.resource.data.text is string;
+
+        // The web page posts through postScannerMessage; in the app, each
+        // side posts only as itself.
+        allow create: if request.auth != null
+          && !('loggedByServer' in request.resource.data)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && ((request.resource.data.sender == 'owner' && request.auth.uid == chat().ownerUid)
+            || (request.resource.data.sender == 'scanner' && request.auth.uid == chat().get('scannerUid', '')))
+          && inThisChat(request.resource.data.get('mediaUrl', ''))
+          && inThisChat(request.resource.data.get('audioUrl', ''));
       }
     }
   }

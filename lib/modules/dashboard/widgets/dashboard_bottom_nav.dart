@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../app/widgets/glass.dart';
 
 /// Floating dock: a frosted-glass pill holding the three tabs, with a
 /// liquid indicator that stretches from tab to tab, plus a separate raised
@@ -12,44 +13,72 @@ import '../../../app/theme/app_text_styles.dart';
 ///
 /// Meant for `Scaffold(extendBody: true)`, so content scrolls behind the
 /// blur; tab bodies clear it with `MediaQuery.paddingOf(context).bottom`.
+typedef NavTab = ({IconData icon, IconData selectedIcon, String label});
+
 class DashboardBottomNav extends StatelessWidget {
   const DashboardBottomNav({
     super.key,
     required this.selectedIndex,
     required this.onTap,
-    required this.onAddVehicle,
+    this.onAddVehicle,
     this.unreadCount = 0,
+    this.tabs = customerTabs,
+    this.badgeTab = 1,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onTap;
-  final VoidCallback onAddVehicle;
 
-  /// Unread messages across every conversation, shown on the Messages tab.
+  /// The raised Add-vehicle button; hidden when null (the admin side).
+  final VoidCallback? onAddVehicle;
+
+  /// Count shown on the [badgeTab] tab (unread messages for customers).
   final int unreadCount;
+
+  final List<NavTab> tabs;
+  final int badgeTab;
 
   static const _height = 64.0;
 
-  static const _tabs = [
-    (icon: Icons.directions_car_filled_outlined, selectedIcon: Icons.directions_car_filled, label: 'Home'),
-    (icon: Icons.chat_bubble_outline_rounded, selectedIcon: Icons.chat_bubble_rounded, label: 'Messages'),
-    (icon: Icons.person_outline_rounded, selectedIcon: Icons.person_rounded, label: 'Profile'),
+  static const customerTabs = <NavTab>[
+    (
+      icon: Icons.directions_car_filled_outlined,
+      selectedIcon: Icons.directions_car_filled,
+      label: 'Home',
+    ),
+    (
+      icon: Icons.chat_bubble_outline_rounded,
+      selectedIcon: Icons.chat_bubble_rounded,
+      label: 'Messages',
+    ),
+    (
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
+      label: 'Profile',
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final background = AppColors.background;
+    final glass = GlassScope.of(context);
 
     return DecoratedBox(
-      // Fades content out beneath the dock so it never fights the tabs.
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [background.withValues(alpha: 0), background.withValues(alpha: 0.92)],
-          stops: const [0, 0.55],
-        ),
-      ),
+      // Fades content out beneath the dock so it never fights the tabs —
+      // not on the admin side, which uses no gradients.
+      decoration: glass
+          ? const BoxDecoration()
+          : BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  background.withValues(alpha: 0),
+                  background.withValues(alpha: 0.92),
+                ],
+                stops: const [0, 0.55],
+              ),
+            ),
       child: SafeArea(
         top: false,
         minimum: const EdgeInsets.only(bottom: 12),
@@ -57,9 +86,11 @@ class DashboardBottomNav extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
           child: Row(
             children: [
-              Expanded(child: _glassPill()),
-              const SizedBox(width: 12),
-              _AddButton(size: _height, onTap: onAddVehicle),
+              Expanded(child: _glassPill(glass)),
+              if (onAddVehicle case final onAdd?) ...[
+                const SizedBox(width: 12),
+                _AddButton(size: _height, onTap: onAdd),
+              ],
             ],
           ),
         ),
@@ -67,7 +98,7 @@ class DashboardBottomNav extends StatelessWidget {
     );
   }
 
-  Widget _glassPill() {
+  Widget _glassPill(bool glass) {
     const radius = BorderRadius.all(Radius.circular(_height / 2));
 
     return DecoratedBox(
@@ -75,7 +106,9 @@ class DashboardBottomNav extends StatelessWidget {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: glass
+                ? GlassTokens.shadow
+                : Colors.black.withValues(alpha: 0.18),
             blurRadius: 28,
             offset: const Offset(0, 12),
           ),
@@ -88,28 +121,37 @@ class DashboardBottomNav extends StatelessWidget {
           child: Container(
             height: _height,
             decoration: BoxDecoration(
-              color: AppColors.surface.withValues(alpha: 0.82),
+              color: glass
+                  ? GlassTokens.fillStrong
+                  : AppColors.surface.withValues(alpha: 0.82),
               borderRadius: radius,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(
+                color: glass ? GlassTokens.rimHigh : AppColors.border,
+              ),
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final segment = constraints.maxWidth / _tabs.length;
+                final segment = constraints.maxWidth / tabs.length;
                 return Stack(
                   children: [
-                    _LiquidIndicator(index: selectedIndex, segmentWidth: segment),
+                    _LiquidIndicator(
+                      index: selectedIndex,
+                      segmentWidth: segment,
+                    ),
                     Row(
                       children: [
-                        for (var i = 0; i < _tabs.length; i++)
+                        for (var i = 0; i < tabs.length; i++)
                           Expanded(
                             child: _NavItem(
-                              icon: _tabs[i].icon,
-                              selectedIcon: _tabs[i].selectedIcon,
-                              label: _tabs[i].label,
+                              icon: tabs[i].icon,
+                              selectedIcon: tabs[i].selectedIcon,
+                              label: tabs[i].label,
                               isSelected: selectedIndex == i,
-                              badgeCount: i == 1 ? unreadCount : 0,
+                              badgeCount: i == badgeTab ? unreadCount : 0,
                               onTap: () {
-                                if (selectedIndex != i) HapticFeedback.selectionClick();
+                                if (selectedIndex != i) {
+                                  HapticFeedback.selectionClick();
+                                }
                                 onTap(i);
                               },
                             ),
@@ -219,7 +261,9 @@ class _LiquidIndicatorState extends State<_LiquidIndicator>
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.13),
-              borderRadius: BorderRadius.circular(DashboardBottomNav._height / 2),
+              borderRadius: BorderRadius.circular(
+                DashboardBottomNav._height / 2,
+              ),
               border: Border.all(color: accent.withValues(alpha: 0.22)),
             ),
           ),
@@ -303,7 +347,11 @@ class _NavItem extends StatelessWidget {
 /// changes the icon's size and the three tabs stay evenly spaced whether
 /// or not there are unread messages.
 class _IconWithBadge extends StatelessWidget {
-  const _IconWithBadge({required this.icon, required this.color, required this.badgeCount});
+  const _IconWithBadge({
+    required this.icon,
+    required this.color,
+    required this.badgeCount,
+  });
 
   final IconData icon;
   final Color color;
@@ -327,7 +375,10 @@ class _IconWithBadge extends StatelessWidget {
               curve: Curves.easeOutBack,
               child: Container(
                 constraints: const BoxConstraints(minWidth: 17),
-                padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4.5,
+                  vertical: 1.5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.yellow,
                   borderRadius: BorderRadius.circular(9),
@@ -385,7 +436,9 @@ class _AddButtonState extends State<_AddButton> {
   Widget build(BuildContext context) {
     final accent = AppColors.yellow;
     final deep = HSLColor.fromColor(accent)
-        .withLightness((HSLColor.fromColor(accent).lightness - 0.1).clamp(0.0, 1.0))
+        .withLightness(
+          (HSLColor.fromColor(accent).lightness - 0.1).clamp(0.0, 1.0),
+        )
         .toColor();
 
     return Semantics(
@@ -421,7 +474,11 @@ class _AddButtonState extends State<_AddButton> {
                 ),
               ],
             ),
-            child: Icon(Icons.add_a_photo_outlined, size: 25, color: Colors.white),
+            child: Icon(
+              Icons.add_a_photo_outlined,
+              size: 25,
+              color: Colors.white,
+            ),
           ),
         ),
       ),

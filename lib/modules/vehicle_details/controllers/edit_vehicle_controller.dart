@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../app/services/auth_service.dart';
+import '../../../app/services/vehicle_service.dart';
+import '../../../app/utils/app_logger.dart';
+import '../../../app/utils/vehicle_color.dart';
 import '../../../app/utils/vehicle_input.dart';
-import '../../dashboard/controllers/home_tab_controller.dart';
 import '../../dashboard/models/vehicle_model.dart';
 import '../../../app/widgets/app_snackbar.dart';
 
@@ -13,6 +16,8 @@ class EditVehicleController extends GetxController {
   static const requiredVehiclePhotos = 2;
 
   final VehicleModel vehicle;
+  final _vehicleService = Get.find<VehicleService>();
+  final _authService = Get.find<AuthService>();
 
   late final make = TextEditingController(text: _splitMakeModel(vehicle.makeModel).$1);
   late final model = TextEditingController(text: _splitMakeModel(vehicle.makeModel).$2);
@@ -74,7 +79,8 @@ class EditVehicleController extends GetxController {
     vehiclePhotos.removeAt(index);
   }
 
-  void save() {
+  Future<void> save() async {
+    if (isSaving.value) return;
     if (!canSave) {
       final missing = <String>[
         if (!_hasRequiredFields) 'make, model and plate number',
@@ -85,60 +91,59 @@ class EditVehicleController extends GetxController {
       return;
     }
 
-    isSaving.value = true;
-    final updated = VehicleModel(
-      id: vehicle.id,
-      // The nickname field was removed from this form, so the vehicle
-      // keeps the one it already has. Falling back to the plate number
-      // covers vehicles that never had one — the Home card, the remove
-      // dialog and the public scan page all display this.
-      nickname: vehicle.nickname.trim().isEmpty ? plateNumber.text.trim() : vehicle.nickname.trim(),
-      makeModel: '${make.text.trim()} ${model.text.trim()}'.trim(),
-      plateNumber: plateNumber.text.trim(),
-      color: _swatchFor(color.text.trim()),
-      colorName: color.text.trim(),
-      hasUnread: vehicle.hasUnread,
-      dateOfRegistration: dateOfRegistration.text.trim(),
-      engineNumber: engineNumber.text.trim(),
-      chassisNumber: chassisNumber.text.trim(),
-      address: address.text.trim(),
-      photoPaths: List.of(vehiclePhotos),
-    );
-
-    // TODO(FR-02): persist the update to Firestore/Firebase Storage.
-    if (Get.isRegistered<HomeTabController>()) {
-      final vehicles = Get.find<HomeTabController>().vehicles;
-      final index = vehicles.indexOf(vehicle);
-      if (index != -1) vehicles[index] = updated;
+    final uid = _authService.currentUid;
+    if (uid == null) {
+      AppSnackbar.show('Signed out', 'Please sign in again to save your changes.');
+      return;
     }
-    isSaving.value = false;
 
-    // Pop back to the Vehicle Details screen already underneath this one on
-    // the stack (it pushed us via Get.toNamed) rather than pushing a fresh
-    // one — pushing a second copy left two Vehicle Details routes, and two
-    // VehicleDetailsControllers, stacked at once, which crashed on the
-    // duplicate QR-card GlobalKey.
-    Get.back(result: updated);
-    AppSnackbar.show('Changes saved', "${updated.nickname}'s details were updated.");
-  }
+    // The nickname field was removed from this form, so the vehicle keeps
+    // the one it already has; vehicles that never had one fall back to the
+    // plate number, which the Home card and scan page display.
+    final nickname = vehicle.nickname.trim().isEmpty ? plateNumber.text.trim() : vehicle.nickname.trim();
 
-  static Color _swatchFor(String name) {
-    switch (name.trim().toLowerCase()) {
-      case 'white':
-        return const Color(0xFFF5F1E8);
-      case 'black':
-        return const Color(0xFF2B2B2B);
-      case 'silver':
-        return const Color(0xFFC2C2BE);
-      case 'grey':
-      case 'gray':
-        return const Color(0xFF8A8A85);
-      case 'red':
-        return const Color(0xFFC1443C);
-      case 'blue':
-        return const Color(0xFF3E6FB0);
-      default:
-        return const Color(0xFF8A8A85);
+    isSaving.value = true;
+    try {
+      final photoUrls = await _vehicleService.updateVehicle(
+        uid: uid,
+        vehicleId: vehicle.id,
+        nickname: nickname,
+        make: make.text.trim(),
+        model: model.text.trim(),
+        plateNumber: plateNumber.text.trim(),
+        colorName: color.text.trim(),
+        dateOfRegistration: dateOfRegistration.text.trim(),
+        engineNumber: engineNumber.text.trim(),
+        chassisNumber: chassisNumber.text.trim(),
+        address: address.text.trim(),
+        photos: List.of(vehiclePhotos),
+      );
+
+      final updated = VehicleModel(
+        id: vehicle.id,
+        nickname: nickname,
+        makeModel: '${make.text.trim()} ${model.text.trim()}'.trim(),
+        plateNumber: plateNumber.text.trim(),
+        color: vehicleColorForName(color.text.trim()),
+        colorName: color.text.trim(),
+        hasUnread: vehicle.hasUnread,
+        dateOfRegistration: dateOfRegistration.text.trim(),
+        engineNumber: engineNumber.text.trim(),
+        chassisNumber: chassisNumber.text.trim(),
+        address: address.text.trim(),
+        photoPaths: photoUrls,
+      );
+
+      // Pop back to the Vehicle Details screen already underneath this one
+      // rather than pushing a fresh one — a second copy crashed on the
+      // duplicate QR-card GlobalKey.
+      Get.back(result: updated);
+      AppSnackbar.show('Changes saved', "$nickname's details were updated.");
+    } catch (e, stack) {
+      AppLogger.error('EditVehicle', e, stack);
+      AppSnackbar.show("Couldn't save changes", 'Check your connection and try again.');
+    } finally {
+      isSaving.value = false;
     }
   }
 

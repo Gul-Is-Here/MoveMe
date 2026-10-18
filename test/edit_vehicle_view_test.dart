@@ -111,16 +111,40 @@ void main() {
     expect(find.text('Save Changes'), findsOneWidget);
   });
 
-  testWidgets('Saving updates the vehicle in the Home tab list in place', (tester) async {
-    Get.put(HomeTabController());
-    final home = Get.find<HomeTabController>();
-    home.vehicles.assignAll([_vehicle]);
+  /// Signs a resident in and stores [_vehicle] as theirs, returning the
+  /// saved copy (with the id the fake assigned).
+  Future<VehicleModel> seedSavedVehicle() async {
+    (Get.find<AuthService>() as FakeAuthService).signInAs(uid: 'owner-1', phone: '+923001234567');
+    final id = await Get.find<VehicleService>().saveVehicle(
+      uid: 'owner-1',
+      ownerName: 'Ali',
+      nickname: _vehicle.nickname,
+      make: 'Toyota',
+      model: 'Corolla Altis',
+      plateNumber: _vehicle.plateNumber,
+      colorName: _vehicle.colorName,
+      dateOfRegistration: _vehicle.dateOfRegistration,
+      engineNumber: _vehicle.engineNumber,
+      chassisNumber: _vehicle.chassisNumber,
+      address: _vehicle.address,
+      localPhotoPaths: _vehicle.photoPaths,
+    );
+    return VehicleModel(
+      id: id,
+      nickname: _vehicle.nickname,
+      makeModel: _vehicle.makeModel,
+      plateNumber: _vehicle.plateNumber,
+      color: _vehicle.color,
+      colorName: _vehicle.colorName,
+      dateOfRegistration: _vehicle.dateOfRegistration,
+      engineNumber: _vehicle.engineNumber,
+      chassisNumber: _vehicle.chassisNumber,
+      address: _vehicle.address,
+      photoPaths: _vehicle.photoPaths,
+    );
+  }
 
-    final controller = Get.put(EditVehicleController(vehicle: _vehicle));
-    // The nickname field was removed from this form, so edit one that is
-    // still there.
-    controller.model.text = 'Corolla Altis';
-
+  Future<void> pumpRoutes(WidgetTester tester) async {
     await tester.pumpWidget(
       GetMaterialApp(
         initialRoute: '/start',
@@ -131,17 +155,45 @@ void main() {
       ),
     );
     await tester.pump();
+  }
 
-    controller.save();
-    await tester.pump();
+  testWidgets('Saving writes the edit to the database and Home picks it up', (tester) async {
+    final saved = await seedSavedVehicle();
+    final home = Get.put(HomeTabController());
+    await pumpRoutes(tester);
+
+    final controller = Get.put(EditVehicleController(vehicle: saved));
+    controller.plateNumber.text = 'LEB-5566';
+    controller.color.text = 'Red';
+
+    await controller.save();
     await tester.pump(const Duration(seconds: 4));
 
-    expect(home.vehicles.length, 1);
-    expect(home.vehicles.first.makeModel, 'Toyota Corolla Altis');
-    expect(home.vehicles.first.plateNumber, 'LEA-2231');
-    // Removing the field must not wipe the stored nickname — the Home
-    // card, the remove dialog and the public scan page all show it.
-    expect(home.vehicles.first.nickname, _vehicle.nickname);
+    final record = (Get.find<VehicleService>() as FakeVehicleService).saved.single;
+    expect(record['plateNumber'], 'LEB-5566');
+    expect(record['colorName'], 'Red');
+    // Removing the nickname field must not wipe the stored nickname — the
+    // Home card, the remove dialog and the public scan page all show it.
+    expect(record['nickname'], _vehicle.nickname);
+
+    expect(home.vehicles.single.plateNumber, 'LEB-5566');
+    expect(controller.isSaving.value, isFalse);
+  });
+
+  testWidgets('A failed save keeps the screen open and the edit unsaved', (tester) async {
+    final saved = await seedSavedVehicle();
+    final vehicles = Get.find<VehicleService>() as FakeVehicleService..throwOnUpdate = true;
+    await pumpRoutes(tester);
+
+    final controller = Get.put(EditVehicleController(vehicle: saved));
+    controller.plateNumber.text = 'LEB-5566';
+
+    await controller.save();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(vehicles.saved.single['plateNumber'], 'LEA-2231');
+    expect(controller.isSaving.value, isFalse);
+    expect(controller.plateNumber.text, 'LEB-5566');
   });
 
   test('Identifier fields reject special characters but keep hyphens and spaces', () {

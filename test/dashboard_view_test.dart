@@ -87,9 +87,8 @@ void main() {
     // mistaken for the QR-to-chat scanner up in the Home tab's app bar.
     expect(find.byIcon(Icons.add_a_photo_outlined), findsOneWidget);
     expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
-    // The Home header's second action opens Messages. It used to be a bell
-    // with no onTap at all.
-    expect(find.byIcon(Icons.forum_outlined), findsOneWidget);
+    // Messages lives in the bottom bar; the Home header's other action is
+    // the profile avatar.
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
@@ -192,7 +191,7 @@ void main() {
     final baseline = inbox.unreadMessageCount;
 
     for (final text in ['Please move', 'Still blocked']) {
-      await fakeConversations.sendScannerMessage(
+      await fakeConversations.simulateScannerMessage(
         vehicleId: 'v-nav',
         scannerId: 's-nav',
         ownerUid: 'resident-1',

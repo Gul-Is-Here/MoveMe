@@ -33,10 +33,14 @@
 			<array>
 				<!-- Required by Firebase Phone Auth's reCAPTCHA fallback to redirect
 				     back into the app. Derived from GOOGLE_APP_ID in
-				     GoogleService-Info.plist ("1:391458076633:ios:b7ffbfec4ec36ee5fbcbc8"
-				     -> "app-1-391458076633-ios-b7ffbfec4ec36ee5fbcbc8"), since this
+				     GoogleService-Info.plist ("1:709693784542:ios:6190486579eb9bc9209d4f"
+				     -> "app-1-709693784542-ios-6190486579eb9bc9209d4f"), since this
 				     project has no Google Sign-In client (no REVERSED_CLIENT_ID). -->
-				<string>app-1-391458076633-ios-b7ffbfec4ec36ee5fbcbc8</string>
+				<string>app-1-709693784542-ios-6190486579eb9bc9209d4f</string>
+				<!-- moveme://{host}/scan/{id}: the Scan Contact Page's "Open in
+				     App" button, since Safari won't follow a Universal Link to
+				     the page's own domain. -->
+				<string>moveme</string>
 			</array>
 		</dict>
 	</array>
@@ -53,6 +57,8 @@
 	<string>MoveMe needs photo library access to add photos of your vehicle.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MoveMe needs microphone access to record voice messages in chat.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MoveMe can record where a sticker was scanned, to keep owners safe from harassment. Sharing it is optional.</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

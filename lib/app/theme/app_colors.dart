@@ -12,6 +12,9 @@ class AppColors {
   static bool get _isLight =>
       Get.isRegistered<ThemeController>() && ThemeController.to.isLight;
 
+  /// Whether the light palette is the one showing.
+  static bool get isLight => _isLight;
+
   /// Dark is the app's original, default look.
   static Color get background =>
       _isLight ? _light.background : _dark.background;

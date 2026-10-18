@@ -39,6 +39,30 @@ void main() {
     return fakeAuth;
   }
 
+  testWidgets('Profile lets the resident change how they are reached', (tester) async {
+    final auth = signedInFakeAuth();
+    auth.profiles['resident-1'] = {...?auth.profiles['resident-1'], 'communicationPreference': 'app'};
+    Get.put<AuthService>(auth);
+    final controller = Get.put(ProfileController());
+
+    await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: ProfileView())));
+    await tester.pump();
+    await tester.pump();
+    expect(controller.communicationPreference.value, 'app');
+
+    await tester.dragUntilVisible(find.text('On the web link'), find.byType(ListView), const Offset(0, -200));
+    await tester.ensureVisible(find.text('On the web link'));
+    await tester.pumpAndSettle();
+    // Bring it to mid-screen, clear of the card's rise-in offset.
+    await tester.drag(find.byType(ListView), const Offset(0, 150));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('On the web link'));
+    await tester.pumpAndSettle();
+
+    expect(controller.communicationPreference.value, 'web');
+    expect(auth.communicationPreferences['resident-1'], 'web');
+  });
+
   testWidgets('Profile loads and renders the signed-in resident, verified phone and CNIC', (tester) async {
     Get.put<AuthService>(signedInFakeAuth());
     Get.put(ProfileController());

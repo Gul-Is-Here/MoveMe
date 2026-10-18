@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Files are shown through their download URLs (which carry their own
+// token), so reads here only cover the app's own listing and URL lookups.
+//
+// No firestore.get() lookups: those need the Storage service agent to hold
+// roles/firebaserules.firestoreServiceAgent, and without it every rule that
+// uses one denies.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function underMb(mb) {
+      return request.resource.size < mb * 1024 * 1024;
+    }
+
+    match /vehicle_photos/{uid}/{vehicleId}/{file} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && underMb(15);
+    }
+
+    match /rc_cards/{uid}/{vehicleId}/{file} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && underMb(15);
+    }
+
+    match /payment_proofs/{uid}/{file} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && underMb(10) && request.resource.contentType.matches('image/.*');
+    }
+
+    // Chat voice notes, photos and videos. Which chats a user is in is
+    // enforced by the Firestore rules on the message that links the file.
+    match /conversations/{conversationId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow create: if signedIn() && underMb(25);
+    }
+
+    // The public scan page (no sign-in) uploads its photos, videos and
+    // voice notes here; postScannerMessage only accepts files from the
+    // visitor's own conversation folder.
+    match /conversations/{conversationId}/scanner/{file} {
+      allow create: if conversationId.matches('^[A-Za-z0-9]{10,40}_[A-Za-z0-9]{16,64}$')
+        && underMb(25)
+        && request.resource.contentType.matches('(image|video|audio)/.*');
+    }
+  }
+}

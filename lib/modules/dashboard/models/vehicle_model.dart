@@ -42,5 +42,5 @@ class VehicleModel {
 }
 
 /// Base URL the public Scan Contact Page is actually deployed to
-/// (`firebase deploy --only hosting`, project `car-ping-9d4f8`).
-const scanBaseUrl = 'https://car-ping-9d4f8.web.app';
+/// (`firebase deploy --only hosting`, project `moveme-da262`).
+const scanBaseUrl = 'https://moveme-da262.web.app';

@@ -5,6 +5,7 @@ import '../../../app/services/auth_service.dart';
 import '../../../app/services/deep_link_service.dart';
 import '../../../app/services/onboarding_service.dart';
 import '../../../app/services/push_notification_service.dart';
+import '../../../app/utils/app_logger.dart';
 
 class SplashController extends GetxController {
   // The splash reveal runs ~2s; this leaves a brief beat on the settled
@@ -33,6 +34,17 @@ class SplashController extends GetxController {
       // install) or can rotate between app launches — keep it current.
       await _pushService.syncToken();
 
+      // An order notification tapped while the app was closed.
+      final pendingOrder = _pushService.consumePendingOrder();
+
+      if (await _isAdmin()) {
+        Get.offAllNamed(AppRoutes.admin);
+        if (pendingOrder != null && pendingOrder.forAdmin) {
+          Get.toNamed(AppRoutes.adminOrder, arguments: pendingOrder.number);
+        }
+        return;
+      }
+
       // A QR/deep-link scan that arrived before routing was ready (app
       // cold-started straight from a tapped link) never gets silently
       // dropped — resolve it now and land directly in that chat instead of
@@ -49,11 +61,22 @@ class SplashController extends GetxController {
         await _deepLinkService.resolveAndOpenChat(pendingScan);
       } else if (pendingThread != null) {
         Get.toNamed(AppRoutes.chatThread, arguments: pendingThread);
+      } else if (pendingOrder != null && !pendingOrder.forAdmin) {
+        Get.toNamed(AppRoutes.orderDetails, arguments: pendingOrder.number);
       }
       return;
     }
 
     final seenOnboarding = await _onboardingService.hasSeenOnboarding();
     Get.offAllNamed(seenOnboarding ? AppRoutes.login : AppRoutes.onboarding);
+  }
+
+  Future<bool> _isAdmin() async {
+    try {
+      return await _authService.isAdmin();
+    } catch (e, stack) {
+      AppLogger.error('Splash', e, stack);
+      return false;
+    }
   }
 }

@@ -1,14 +1,14 @@
 const { setGlobalOptions } = require("firebase-functions");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const crypto = require("crypto");
 const { getAuth } = require("firebase-admin/auth");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
-const { getStorage } = require("firebase-admin/storage");
+const { getStorage, getDownloadURL } = require("firebase-admin/storage");
 
 setGlobalOptions({ maxInstances: 10 });
 
@@ -24,9 +24,53 @@ const smsApiKey = defineSecret("SMS_API_KEY");
 const smsApiUrl = defineString("SMS_API_URL");
 const smsSenderId = defineString("SMS_SENDER_ID");
 
+// The one number that gets the admin side. Changing it shuts the old admin
+// out on their next request (see claimAdminRole / isAdminRequest).
+const adminPhone = defineString("ADMIN_PHONE", { default: "+923079618674" });
+
 initializeApp();
 const db = getFirestore();
 const messaging = getMessaging();
+
+/** { uid, phone } of the account that last claimed the admin role. */
+const ADMIN_CONFIG = db.collection("config").doc("admin");
+
+const SAFETY_LOG_DAYS = 365;
+
+/** A shared location, if the visitor allowed it: { lat, lng, accuracy }. */
+function locationFrom(value) {
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  const accuracy = Number(value?.accuracy);
+  return { lat, lng, accuracy: Number.isFinite(accuracy) ? Math.round(accuracy) : null };
+}
+
+/**
+ * The safety log: evidence for the police if a sticker is used to harass
+ * or stalk an owner. Server-only (no client can read it) and kept for
+ * SAFETY_LOG_DAYS via the `expireAt` TTL. Never fails the request it
+ * records.
+ */
+async function logSafetyEvent(type, details, request) {
+  try {
+    const raw = request?.rawRequest;
+    const forwarded = String(raw?.headers?.["x-forwarded-for"] || "").split(",")[0].trim();
+    await db.collection("activityLog").add({
+      type,
+      ...details,
+      ip: forwarded || raw?.ip || null,
+      userAgent: raw?.headers?.["user-agent"] || null,
+      uid: request?.auth?.uid || null,
+      phone: request?.auth?.token?.phone_number || null,
+      genuineApp: Boolean(request?.app),
+      at: FieldValue.serverTimestamp(),
+      expireAt: Timestamp.fromMillis(Date.now() + SAFETY_LOG_DAYS * 24 * 3600 * 1000),
+    });
+  } catch (e) {
+    logger.error("logSafetyEvent failed", e);
+  }
+}
 
 /**
  * FR-05/FR-06: pushes a notification to a vehicle's owner the moment a
@@ -38,9 +82,21 @@ exports.onNewChatMessage = onDocumentCreated(
   "conversations/{conversationId}/messages/{messageId}",
   async (event) => {
     const message = event.data?.data();
-    if (!message || message.sender !== "scanner") return;
-
+    if (!message) return;
     const { conversationId } = event.params;
+
+    // Web messages are logged by postScannerMessage (with IP); these are
+    // the app's own, written straight to Firestore.
+    if (!message.loggedByServer) {
+      await logSafetyEvent("app_message", {
+        conversationId,
+        sender: message.sender || null,
+        kind: message.kind || "text",
+        text: message.text || null,
+      }, null);
+    }
+    if (message.sender !== "scanner") return;
+
     const conversationSnap = await db.collection("conversations").doc(conversationId).get();
     const conversation = conversationSnap.data();
     if (!conversation) return;
@@ -58,12 +114,14 @@ exports.onNewChatMessage = onDocumentCreated(
     const scannerName = conversation.scannerName || "Anonymous";
     const plateNumber = conversation.plateNumber || "your vehicle";
     const text = typeof message.text === "string" ? message.text : "";
+    const body =
+      { voice: "🎤 Voice message", image: "📷 Photo", video: "🎥 Video" }[message.kind] || text;
 
     const response = await messaging.sendEachForMulticast({
       tokens,
       notification: {
         title: `${scannerName} messaged you about ${plateNumber}`,
-        body: text,
+        body,
       },
       data: {
         type: "chat_message",
@@ -80,9 +138,12 @@ exports.onNewChatMessage = onDocumentCreated(
           // push does not depend on the client's default being configured.
           channelId: "parktag_messages",
           sound: "default",
+          // A text plus photos sent together replace one another instead
+          // of stacking up as separate notifications.
+          tag: conversationId,
         },
       },
-      apns: { payload: { aps: { sound: "default" } } },
+      apns: { payload: { aps: { sound: "default", "thread-id": conversationId } } },
     });
 
     // A token stops being valid when the app is uninstalled or its
@@ -107,6 +168,80 @@ exports.onNewChatMessage = onDocumentCreated(
     );
   },
 );
+
+/**
+ * Sends one notification to every device of `uid`, dropping tokens that
+ * are no longer registered. `data` values must be strings.
+ */
+async function pushToUser(uid, { title, body, data }) {
+  if (!uid) return;
+  const userSnap = await db.collection("users").doc(uid).get();
+  const tokens = userSnap.data()?.fcmTokens;
+  if (!Array.isArray(tokens) || tokens.length === 0) {
+    logger.info(`pushToUser: no FCM tokens for ${uid}.`);
+    return;
+  }
+  const response = await messaging.sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    data,
+    android: { priority: "high", notification: { channelId: "parktag_messages", sound: "default" } },
+    apns: { payload: { aps: { sound: "default" } } },
+  });
+  const staleTokens = tokens.filter((_, i) => {
+    const code = response.responses[i].error?.code;
+    return code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token";
+  });
+  if (staleTokens.length > 0) {
+    await db.collection("users").doc(uid).update({ fcmTokens: FieldValue.arrayRemove(...staleTokens) });
+  }
+  const failureCodes = response.responses.filter((r) => r.error).map((r) => r.error.code);
+  logger.info(
+    `pushToUser ${uid}: ${response.successCount} sent, ${staleTokens.length} stale removed` +
+      (failureCodes.length ? `, failures: ${failureCodes.join(", ")}` : "") + ".",
+  );
+}
+
+const ORDER_STATUS_TEXT = {
+  review: ["Payment under review", "We're checking your payment."],
+  confirmed: ["Confirmed", "Payment received — your order is confirmed."],
+  printing: ["Printing", "Your QR stickers are being printed."],
+  shipped: ["Shipped", "On the way to your address."],
+  rejected: ["Payment rejected", "We could not confirm your payment."],
+  cancelled: ["Cancelled", "This order was cancelled."],
+};
+
+const rupees = (n) => `Rs ${Number(n || 0).toLocaleString("en-US")}`;
+
+/** A new sticker order alerts the admin; tapping it opens that order. */
+exports.onOrderCreated = onDocumentCreated("orders/{orderId}", async (event) => {
+  const order = event.data?.data();
+  if (!order) return;
+  const admin = await ADMIN_CONFIG.get();
+  const quantity = order.quantity || 0;
+  await pushToUser(admin.data()?.uid, {
+    title: `New order #${event.params.orderId}`,
+    body: `${order.customerName} · ${quantity} sticker${quantity === 1 ? "" : "s"} · ${rupees(order.total)} via ${order.payment?.method || "payment"}`,
+    data: { type: "order", orderId: event.params.orderId, audience: "admin" },
+  });
+});
+
+/**
+ * A status change (or a new note) tells the customer, using the admin's
+ * note when there is one; tapping it opens their order.
+ */
+exports.onOrderUpdated = onDocumentUpdated("orders/{orderId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!before || !after) return;
+  if (before.status === after.status && before.note === after.note) return;
+  const [label, defaultText] = ORDER_STATUS_TEXT[after.status] || ["Updated", "Your order was updated."];
+  await pushToUser(after.uid, {
+    title: `Order #${event.params.orderId}: ${label}`,
+    body: after.note || defaultText,
+    data: { type: "order", orderId: event.params.orderId, audience: "customer" },
+  });
+});
 
 /**
  * FR-09: called once, right after a resident signs in, with the anonymous
@@ -198,7 +333,7 @@ exports.resolveVehicleAndOpenChat = onCall(async (request) => {
   }
 
   const scannerSnap = await db.collection("users").doc(scannerUid).get();
-  const scannerName = scannerSnap.data()?.name || "A ParkTag resident";
+  const scannerName = scannerSnap.data()?.name || "A MoveMe resident";
 
   // FR-09: this scan may be a continuation of a conversation this person
   // already started anonymously from the public web page, before they had
@@ -248,7 +383,7 @@ exports.resolveVehicleAndOpenChat = onCall(async (request) => {
     const data = {
       vehicleId,
       ownerUid,
-      ownerName: vehicle.ownerName || "A ParkTag resident",
+      ownerName: vehicle.ownerName || "A MoveMe resident",
       scannerId: scannerUid,
       scannerUid,
       scannerName,
@@ -268,10 +403,11 @@ exports.resolveVehicleAndOpenChat = onCall(async (request) => {
   });
 
   logger.info(`resolveVehicleAndOpenChat: ${scannerUid} -> ${conversationId} (vehicle ${vehicleId}).`);
+  await logSafetyEvent("in_app_scan", { vehicleId, conversationId, ownerUid }, request);
 
   return {
     conversationId,
-    ownerName: conversation.ownerName || "A ParkTag resident",
+    ownerName: conversation.ownerName || "A MoveMe resident",
     plateNumber: conversation.plateNumber || "",
     colorName: conversation.colorName || "",
     resolved: conversation.resolved || false,
@@ -523,6 +659,202 @@ exports.verifyPhoneOtp = onCall(async (request) => {
     uid = (await auth.createUser({ phoneNumber: phone })).uid;
   }
   return { token: await auth.createCustomToken(uid) };
+});
+
+const SCANNER_ID = /^[A-Za-z0-9]{16,64}$/;
+
+/** The public scan page records each visit (and location, if shared). */
+exports.logActivity = onCall(async (request) => {
+  const vehicleId = String(request.data?.vehicleId || "").slice(0, 40);
+  const scannerId = String(request.data?.scannerId || "").slice(0, 64);
+  if (!vehicleId) throw new HttpsError("invalid-argument", "Which vehicle?");
+  await logSafetyEvent("scan_page_visit", {
+    vehicleId,
+    scannerId,
+    location: locationFrom(request.data?.location),
+  }, request);
+  return { ok: true };
+});
+const ATTACHMENT_KINDS = ["voice", "image", "video"];
+const PREVIEW = { voice: "🎤 Voice message", image: "📷 Photo", video: "🎥 Video" };
+
+/**
+ * The only way the public scan page sends a message. Looks the owner up
+ * from the vehicle itself (never trusts the page), creates this visitor's
+ * conversation on first contact, and appends the text and any attachments
+ * — which must already be uploaded inside this conversation's own
+ * `scanner/` Storage folder.
+ */
+exports.postScannerMessage = onCall({ timeoutSeconds: 60 }, async (request) => {
+  const data = request.data || {};
+  const vehicleId = String(data.vehicleId || "");
+  const scannerId = String(data.scannerId || "");
+  const scannerName = String(data.scannerName || "").trim().slice(0, 40);
+  const text = String(data.text || "").trim().slice(0, 1000);
+  const attachments = Array.isArray(data.attachments) ? data.attachments.slice(0, 5) : [];
+
+  if (!/^[A-Za-z0-9]{10,40}$/.test(vehicleId) || !SCANNER_ID.test(scannerId)) {
+    throw new HttpsError("invalid-argument", "This link is not valid.");
+  }
+  if (!text && attachments.length === 0) {
+    throw new HttpsError("invalid-argument", "Write a message or add a photo, video or voice note.");
+  }
+
+  const vehicleSnap = await db.collection("vehicles").doc(vehicleId).get();
+  const vehicle = vehicleSnap.data();
+  if (!vehicle?.ownerUid) {
+    throw new HttpsError("not-found", "The sticker may be damaged, or the vehicle was removed from MoveMe.");
+  }
+
+  const conversationId = `${vehicleId}_${scannerId}`;
+  const folder = `conversations/${conversationId}/scanner/`;
+  const bucket = getStorage().bucket();
+  const media = [];
+  for (const a of attachments) {
+    const kind = String(a?.kind || "");
+    const path = String(a?.path || "");
+    if (!ATTACHMENT_KINDS.includes(kind) || !path.startsWith(folder) || path.includes("..")) {
+      throw new HttpsError("invalid-argument", "An attachment is not part of this chat.");
+    }
+    const file = bucket.file(path);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError("invalid-argument", "An attachment did not finish uploading.");
+    const url = await getDownloadURL(file);
+    const seconds = Math.max(0, Math.min(120, Math.round(Number(a?.durationSeconds) || 0)));
+    media.push({ kind, url, seconds });
+  }
+
+  const conversationRef = db.collection("conversations").doc(conversationId);
+  const existing = await conversationRef.get();
+  const messageCount = media.length + (text ? 1 : 0);
+  const last = text || PREVIEW[media[media.length - 1].kind];
+  const batch = db.batch();
+  batch.set(conversationRef, {
+    vehicleId,
+    scannerId,
+    ownerUid: vehicle.ownerUid,
+    plateNumber: vehicle.plateNumber || "",
+    colorName: vehicle.colorName || "",
+    ...(scannerName || !existing.exists ? { scannerName: scannerName || "Anonymous" } : {}),
+    lastMessagePreview: last,
+    lastMessageAt: FieldValue.serverTimestamp(),
+    unreadForOwner: true,
+    unreadForScanner: false,
+    unreadCountForOwner: FieldValue.increment(messageCount),
+    unreadCountForScanner: 0,
+    resolved: false,
+  }, { merge: true });
+
+  // Distinct, increasing times keep the photos and text in the order sent.
+  const start = Date.now();
+  let i = 0;
+  const messages = conversationRef.collection("messages");
+  for (const m of media) {
+    batch.set(messages.doc(), {
+      sender: "scanner",
+      kind: m.kind,
+      text: "",
+      ...(m.kind === "voice" ? { audioUrl: m.url, durationSeconds: m.seconds } : { mediaUrl: m.url }),
+      loggedByServer: true,
+      createdAt: Timestamp.fromMillis(start + i++),
+    });
+  }
+  if (text) {
+    batch.set(messages.doc(), {
+      sender: "scanner",
+      kind: "text",
+      text,
+      loggedByServer: true,
+      createdAt: Timestamp.fromMillis(start + i++),
+    });
+  }
+  await batch.commit();
+  await logSafetyEvent("scanner_message", {
+    vehicleId,
+    scannerId,
+    conversationId,
+    ownerUid: vehicle.ownerUid,
+    scannerName: scannerName || null,
+    text: text || null,
+    attachments: media.map((m) => m.kind),
+    location: locationFrom(data.location),
+  }, request);
+  return { conversationId };
+});
+
+/**
+ * Sign-up/login's "is this number registered?" check, which runs before
+ * the user is signed in. Answers yes/no only, so `users/{uid}` (name,
+ * phone, CNIC) can stay readable by its owner alone.
+ */
+exports.lookupPhone = onCall(async (request) => {
+  const phone = String(request.data?.phone || "");
+  if (!PK_MOBILE.test(phone)) {
+    throw new HttpsError("invalid-argument", "Enter a valid Pakistani mobile number.");
+  }
+  const match = await db.collection("users").where("phone", "==", phone).limit(1).get();
+  return {
+    registered: !match.empty,
+    isAdmin: phone === adminPhone.value(),
+    blocked: !match.empty && match.docs[0].data().blocked === true,
+  };
+});
+
+
+/** True only for the signed-in ADMIN_PHONE account that claimed the role. */
+async function isAdminRequest(request) {
+  const uid = request.auth?.uid;
+  if (!uid || request.auth.token.phone_number !== adminPhone.value()) return false;
+  const config = await ADMIN_CONFIG.get();
+  return config.exists && config.data().uid === uid;
+}
+
+async function requireAdmin(request) {
+  if (!(await isAdminRequest(request))) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+}
+
+/**
+ * Called right after the ADMIN_PHONE number signs in. Records its uid in
+ * config/admin, which the security rules check for every admin read/write;
+ * whoever held it before (an old ADMIN_PHONE) loses access immediately.
+ */
+exports.claimAdminRole = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  const phone = request.auth.token.phone_number;
+  if (phone !== adminPhone.value()) {
+    throw new HttpsError("permission-denied", "This number is not the MoveMe admin.");
+  }
+  await ADMIN_CONFIG.set({ uid, phone, claimedAt: FieldValue.serverTimestamp() });
+  logger.info(`claimAdminRole: admin is now ${uid}`);
+  return { admin: true };
+});
+
+/**
+ * Admin only. Blocking disables the customer's sign-in and revokes their
+ * sessions, so every device is signed out once its current token expires
+ * (within the hour). Nothing is deleted; unblocking lets them sign in again.
+ */
+exports.setUserBlocked = onCall(async (request) => {
+  await requireAdmin(request);
+  const uid = String(request.data?.uid || "");
+  const blocked = request.data?.blocked === true;
+  if (!uid) throw new HttpsError("invalid-argument", "Which user?");
+  if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "You can't block yourself.");
+
+  const auth = getAuth();
+  await auth.updateUser(uid, { disabled: blocked });
+  if (blocked) await auth.revokeRefreshTokens(uid);
+  await db.collection("users").doc(uid).set(
+    { blocked, blockedAt: blocked ? FieldValue.serverTimestamp() : FieldValue.delete() },
+    { merge: true },
+  );
+  logger.info(`setUserBlocked: ${uid} blocked=${blocked} by ${request.auth.uid}`);
+  return { blocked };
 });
 
 /**
